@@ -54,7 +54,7 @@ class MainScenario
         return df.news,main_keyboard
       when @@unreg_commands[4]#jokes
         invite = "Случайные шутки или шутки определенного преподавателя?\xF0\x9F\x8E\x93"
-        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Случайные","Преподаватель"], one_time_keyboard: false)
+        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Случайные","Преподаватель"]+@@menu_button, one_time_keyboard: false)
         dbc.update_user_context(id,'jokes')
         return invite,keyboard
       when @@unreg_commands[5]#feedback
@@ -85,7 +85,9 @@ class MainScenario
 
       elsif user_info[:context]=="timetable"
       elsif user_info[:context]=="jokes"
+
         if message =="Случайные"
+          dbc.update_user_context(id,'main')
           return df.joke,main_keyboard
         elsif message=="Преподаватель"
           invite = "Введите фамилию преподавателя\xF0\x9F\x8E\xAB"
@@ -95,8 +97,38 @@ class MainScenario
         else
           return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
         end
+
       elsif user_info[:context]=="jokes_tutor"
+
         tutors = Messages.teachers
+        found = []
+        for t in tutors
+          if UnicodeUtils.downcase(t[0..t.index(' ')-1])==UnicodeUtils.downcase(message)
+            found.push(t)
+          end
+        end
+        if found.count==1
+          dbc.update_user_context(id,'main')
+          return df.joke(false,10,found[0]),main_keyboard
+        elsif found>1
+          dbc.update_user_context(id,'jokes_tutor_multiple')
+          invite = "Найдено несколько преподавателей с такой фамилией. Выберите одного из них:\n#{found.join(',')}"
+          keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:found.each_slice(2).to_a+@@menu_button, one_time_keyboard: false)
+          return invite,keyboard
+        else
+          return Messages.teacher_not_found
+        end
+
+      elsif user_info[:context]=="jokes_tutor_multiple"
+
+        tutors = Messages.teachers
+        for t in tutors
+          if UnicodeUtils.downcase(t)==UnicodeUtils.downcase(message)
+            dbc.update_user_context(id,'main')
+            return df.joke(false,10,t),main_keyboard
+          end
+        end
+        return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
 
       elsif user_info[:context]=="registration"
       elsif user_info[:context]=="settings"

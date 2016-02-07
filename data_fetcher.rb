@@ -130,7 +130,6 @@ class DataFetcher
         return Messages.building_not_free
       else
         returned_string=building+"\n"
-        selected_building_free_auditories = []
         for i in 0..free_auditories.count-1
           this = free_auditories[i]
           if building == "Главный"
@@ -138,7 +137,7 @@ class DataFetcher
               returned_string+="#{this}\t"
             end
           else
-            if this.include? "-"
+            if this.include? "-" and this[0]==building
               returned_string+="#{this}\t"
             end
           end
