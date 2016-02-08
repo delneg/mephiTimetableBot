@@ -1,5 +1,8 @@
 require_relative 'messages'
 require 'vkontakte_api'
+require 'googl'
+require 'uri'
+require 'openssl'
 class Joke
   def id
     @id
@@ -69,9 +72,24 @@ class DataFetcher
       link = "https://vk.com/vmephi?w=wall-12742657_#{n.id}"
       time = Time.at(n.date).strftime('%d.%m.%Y %H:%M')
       text = n.text.gsub("<br>","\n")
-      returned_string+="Новость от #{time}\nСсылка: #{link}\n#{text}\n"
+      begin
+      text_links = URI.extract(text)
+      replacements = []
+      for l in text_links[0..-1]
+        puts l
+        url = Googl.shorten(l,nil,Config.google_api_key).short_url
+        puts url
+        replacements.push([l,url])
+      end
+      replacements.each {|replacement| text.gsub!(replacement[0], replacement[1])}
+
+      rescue Exception => e
+        puts ''
+      ensure
+        returned_string+="#{'-'*5}Новость от #{time}\nСсылка: #{link}\n#{text}\n"
+      end
     end
-    return returned_string
+    returned_string
   end
   def free_auditories(building,only_buildings=false)
     start_time = Time.now.to_i

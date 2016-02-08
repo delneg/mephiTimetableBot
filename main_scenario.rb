@@ -9,16 +9,20 @@ require_relative 'config'
 #TODO: set timeout for request - 5 sec
 #TODO: keyboards
 #TODO: html markup
+#TODO: db query
+#TODO: decide what timetable variants do we offer ( mind the short names )
 class MainScenario
 
 
   #emoji list http://apps.timwhitlock.info/emoji/tables/unicode
-  @@unreg_commands = ["\xF0\x9F\x86\x93Свободные аудитории","\xF0\x9F\x9A\xB6Карта","\xF0\x9F\x94\xA2Список функций",
-                    "\xF0\x9F\x93\xB0Новости","\xF0\x9F\x98\x82Шутки","\xE2\x9D\x93Обратная связь","\xF0\x9F\x93\x9DРегистрация"]
+
+  @@unreg_commands = ["\xF0\x9F\x86\x93Св. аудитории","\xF0\x9F\x9A\xB6Карта","\xF0\x9F\x94\xA2Функции",
+                    "\xF0\x9F\x93\xB0Новости","\xF0\x9F\x98\x82Шутки","\xE2\x9D\x93Обр. связь","\xF0\x9F\x93\x9DРегистрация"]
   @@reg_commands   = ["\xF0\x9F\x93\x85Расписание","\xE2\x9C\x8FНастройки"]
-  @@menu_button = "\xF0\x9F\x94\x99Меню"
+  @@menu_button = ["\xF0\x9F\x94\x99Меню"]
+
   def main_keyboard
-    Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:@@unreg_commands[0..-2].each_slice(2).to_a+@@reg_commands, one_time_keyboard: false)
+    Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:@@unreg_commands[0..-2].each_slice(2).to_a+@@reg_commands.each_slice(2).to_a, one_time_keyboard: false)
   end
 
 
@@ -77,12 +81,18 @@ class MainScenario
         return invite,keyboard
 
       when @@reg_commands[0]#timetable
-
+        dbc.update_user_context(id,'timetable')
+        variants = ['todayme','group','tutor','auditory','otherme']
+        invite = "Выберите, пожалуйста, тип показа расписания:"
+        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Студент","Преподаватель"]+@@menu_button, one_time_keyboard: false)
+        return invite,keyboard
 
       when @@reg_commands[1]#settings
         user_info = dbc.get_user(id)
-        if user_info[:data]==nil
-          return please_register,main_keyboard
+        if user_info==nil
+          return Messages.please_register,main_keyboard
+        elsif user_info[:data]
+          return Messages.please_register,main_keyboard
         else
           dbc.update_user_context(id,'settings')
           invite = "Хотите сменить тип студент<->преподаватель или изменить свои данные(фио или группу)?"
@@ -177,7 +187,7 @@ class MainScenario
 
         if dbc.groupcheck(message)
           dbc.update_user_all(id,"main",false,message)
-          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Список функций"
+          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Функции"
           return invite,main_keyboard
         else
           return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе группы - попробуйте еще раз (Пример:Ф05-120)\nЕсли проблема повторяется, напишите @TheDelneg"
@@ -187,7 +197,7 @@ class MainScenario
 
         if dbc.familynamecheck(message)
           dbc.update_user_all(id,"main",true,message)
-          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Список функций"
+          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Функции"
           return invite,main_keyboard
         else
           return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе ФИО - попробуйте еще раз (Пример:Сандаков Е.Б.)\nЕсли проблема повторяется, напишите @TheDelneg"
@@ -252,50 +262,53 @@ class Telegram_handler
   #TODO: Logging
   def mainloop
     token=Config.token
-    filename = "mephiBot log #{Time.now.strftime('%d.%m.%Y %H:%M:%S')}.txt"
+
     admin_id=Config.admin_id
     #time options yesterday,today,tomorrow,the day after tomorrow,date
     msc=MainScenario.new
     dbc=DBController.new
-    Telegram::Bot::Client.run(token) do |bot|
+    Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
+
       bot.listen do |message|
         begin
-
           if message.chat.id != admin_id
-            bot.api.sendMessage(chat_id: admin_id, text: "Message from:#{message.from.username},id:#{message.chat.id}\nFirst,last name:#{message.from.first_name} #{message.from.last_name}\nText:#{message.text}")
+            bot.api.send_message(chat_id: admin_id, text: "Message from:#{message.from.username},id:#{message.chat.id}\nFirst,last name:#{message.from.first_name} #{message.from.last_name}\nText:#{message.text}")
+          end
           if message.chat.id == admin_id
-            if message.text[0..8] =='broadcast'
-              broadcast_text = message[10..-1]
-              users = dbc.get_all_users
-              for u in users
-                bot.api.sendMessage(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
+              if message.text[0..8] =='broadcast'
+                broadcast_text = message[10..-1]
+                users = dbc.get_all_users
+                for u in users
+                  bot.api.send_message(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
+                end
+              elsif message.text[0..8] == 'usercount'
+                users = dbc.get_all_users
+                bot.api.send_message(chat_id: admin_id, text: users.join("\n"))
+              elsif message.text[0..8] == 'functions'
+                bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,functions")
               end
-            elsif message.text[0..8] == 'usercount'
-              users = dbc.get_all_users
-              bot.api.sendMessage(chat_id: admin_id, text: users.join("\n"))
-            elsif message.text[0..8] == 'functions'
-              bot.api.sendMessage(chat_id: admin_id, text: "broadcast messagetext,usercount,functions")
-            end
           end
 
           if message.text == '/start'
-            bot.api.sendMessage(chat_id:message.chat.id,text:Messages.start_message, reply_markup:msc.main_keyboard)
-            bot.api.sendMessage(chat_id:message.chat.id,text:Messages.in_development, reply_markup:msc.main_keyboard)
+              bot.api.send_message(chat_id:message.chat.id,text:Messages.start_message, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
+              bot.api.send_message(chat_id:message.chat.id,text:Messages.in_development, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
           elsif UnicodeUtils.downcase(message.text).include? UnicodeUtils.downcase("Карта")
-            bot.api.send_photo(chat_id: message.chat.id, photo: File.new('/root/mephitimetablebot/mephimap.jpg'))
-          else
-            message_handling = msc.handle_message(message.text,message.chat.id)
-            bot.api.sendMessage(chat_id:message.chat.id,text:message_handling[0], reply_markup:message_handling[1])
+            #TODO: change folder back /root/mephitimetablebot/
+              bot.api.send_photo(chat_id: message.chat.id, photo: File.new('/Users/Delneg/Downloads/mephimap.jpg'))
+            else
+              message_handling = msc.handle_message(message.text,message.chat.id)
+              bot.api.send_message(chat_id:message.chat.id,text:message_handling[0], reply_markup:message_handling[1],disable_web_page_preview:true)
           end
 
+        rescue Exception => e
+          puts e.backtrace.join("\n")
+          bot.logger.warn("Exception #{e}")
         end
-      end
     end
   end
   end
 end
 
-#th=Telegram_handler.new
-#th.mainloop
-msc = MainScenario.new
-puts msc.handle_message('/регистрация',11)
+th=Telegram_handler.new
+th.mainloop
+
