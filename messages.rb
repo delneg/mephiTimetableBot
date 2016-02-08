@@ -9,6 +9,9 @@ module Messages
   def start_message
     Config.s_message
   end
+  def please_register
+    "Пожалуйста, зарегистируйтесь для доступа к этой функции.\xF0\x9F\x93\x9D/Регистрация"
+  end
   def not_recognized_message
     "Простите, я не понимаю.\xF0\x9F\x98\x94
 Пожалуйста, используйте меню для доступа к моим функциям или введите /Список функций"
@@ -42,4 +45,5 @@ module Messages
   module_function :teachers
   module_function :teacher_not_found
   module_function :in_development
+  module_function :please_register
 end

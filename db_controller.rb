@@ -38,12 +38,41 @@ class DBController
       end
   end
   def update_user_all(id,context="main",type=nil,data=nil)
-    #TODO: if user already present, update instead of insert
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
       con.autocommit false
       pst = con.prepare "UPDATE TELEGRAMUSERS SET CONTEXT = ?, TYPE = ?, DATA = ? WHERE CHATID = ?"
       pst.execute "#{context}","#{type}","#{data}", "#{id}"
+      con.commit
+      return true
+    rescue Mysql::Error => e
+      con.rollback
+      return [e.errno,e.error]
+    ensure
+      con.close if con
+    end
+  end
+  def update_user_type(id)
+    begin
+      con = Mysql.new @@host, @@user, @@password, @@dbname
+      con.autocommit false
+      pst = con.prepare "UPDATE TELEGRAMUSERS SET TYPE = NOT TYPE WHERE CHATID = ?"
+      pst.execute "#{id}"
+      con.commit
+      return true
+    rescue Mysql::Error => e
+      con.rollback
+      return [e.errno,e.error]
+    ensure
+      con.close if con
+    end
+  end
+  def update_user_data(id,data)
+    begin
+      con = Mysql.new @@host, @@user, @@password, @@dbname
+      con.autocommit false
+      pst = con.prepare "UPDATE TELEGRAMUSERS SET  DATA = ? WHERE CHATID = ?"
+      pst.execute "#{data}","#{id}"
       con.commit
       return true
     rescue Mysql::Error => e

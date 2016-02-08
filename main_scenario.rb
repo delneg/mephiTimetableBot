@@ -78,8 +78,17 @@ class MainScenario
 
       when @@reg_commands[0]#timetable
 
-      when @@reg_commands[1]#settings
 
+      when @@reg_commands[1]#settings
+        user_info = dbc.get_user(id)
+        if user_info[:data]==nil
+          return please_register,main_keyboard
+        else
+          dbc.update_user_context(id,'settings')
+          invite = "Хотите сменить тип студент<->преподаватель или изменить свои данные(фио или группу)?"
+          keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Изменить тип","Изменить данные"]+@@menu_button, one_time_keyboard: false)
+          return invite,keyboard
+        end
       else
         return context_check(message,id)
     end
@@ -101,6 +110,7 @@ class MainScenario
         end
 
       elsif user_info[:context]=="timetable"
+
 
       elsif user_info[:context]=="jokes"
 
@@ -184,6 +194,47 @@ class MainScenario
         end
 
       elsif user_info[:context]=="settings"
+
+        if message=="Изменить тип"
+          dbc.update_user_type(id)
+          now = dbc.get_user(id)
+          if now[:type]
+            invite = "Тип успешно изменен\xE2\x9C\x85\nТеперь вы преподаватель"
+          else
+            invite = "Тип успешно изменен\xE2\x9C\x85Теперь вы студент"
+          end
+          return invite,main_keyboard
+
+        elsif message=="Изменить данные"
+          dbc.update_user_context(id,'settings_data')
+          user = dbc.get_user(id)
+          if user[:type]
+            invite = "Хорошо, введите, пожалуйста, свои ФИО в формате Фамилия И.О.(Пример:Теляковский Д.С.)"
+          else
+            invite = "Хорошо, введите, пожалуйста, свою группу в формате К01-121"
+          end
+          keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+          return invite,keyboard
+        else
+          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+        end
+
+      elsif user_info[:context]=="settings_data"
+
+        user = dbc.get_user(id)
+        if user[:type]
+          check = dbc.familynamecheck(message)
+        else
+          check =dbc.groupcheck(message)
+        end
+        if check
+          dbc.update_user_data(id,message)
+          dbc.update_user_context(id,'main')
+          invite = "Данные успешно изменены на "+message
+          return invite,main_keyboard
+        else
+          return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе данных - попробуйте еще раз \nЕсли проблема повторяется, напишите @TheDelneg"
+        end
 
       elsif user_info[:context]=="main"
         return Messages.not_recognized_message,main_keyboard
