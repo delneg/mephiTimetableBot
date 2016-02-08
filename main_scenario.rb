@@ -39,6 +39,7 @@ class MainScenario
     #end
     case found
       when @@unreg_commands[0]#free auditories
+
         buildings=df.free_auditories('foobar',true)
         if buildings == Messages.server_timeout
           return buildings
@@ -48,20 +49,32 @@ class MainScenario
         invite = "В течение часа будут свободны аудитории в \xF0\x9F\x8F\xA2корпусах:\n#{buildings.join(',')}\nВыберите один корпус, или все корпуса написав \"Все корпуса\""
         return invite,keyboard
         #return invite for buildings or all,keyboard, update context
+
       when @@unreg_commands[2]#function list
+
         return Messages.function_list,main_keyboard
+
       when @@unreg_commands[3]#news
+
         return df.news,main_keyboard
+
       when @@unreg_commands[4]#jokes
+
         invite = "Случайные шутки или шутки определенного преподавателя?\xF0\x9F\x8E\x93"
         keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Случайные","Преподаватель"]+@@menu_button, one_time_keyboard: false)
         dbc.update_user_context(id,'jokes')
         return invite,keyboard
+
       when @@unreg_commands[5]#feedback
+
         return Messages.start_message,main_keyboard
+
       when @@unreg_commands[6]#registration
+
       when @@reg_commands[0]#timetable
+
       when @@reg_commands[1]#settings
+
       else
         return context_check(message,id)
     end
@@ -70,8 +83,7 @@ class MainScenario
   def context_check(message,id)
     dbc=DBController.new
     df=DataFetcher.new
-    #user_info = dbc.get_user(id)
-    user_info=nil
+    user_info = dbc.get_user(id)
     if user_info != nil
       if user_info[:context]=="free_auditories"
 
@@ -84,6 +96,7 @@ class MainScenario
         end
 
       elsif user_info[:context]=="timetable"
+
       elsif user_info[:context]=="jokes"
 
         if message =="Случайные"
@@ -131,8 +144,11 @@ class MainScenario
         return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
 
       elsif user_info[:context]=="registration"
+
       elsif user_info[:context]=="settings"
+
       elsif user_info[:context]=="main"
+        return Messages.not_recognized_message,main_keyboard
       end
     else
       return Messages.not_recognized_message
@@ -158,8 +174,8 @@ class Telegram_handler
                                                \nFirst,last name:#{message.from.first_name} #{message.from.last_name}\nText:#{message.text}")
           if message.chat.id == admin_id
             if message.text[0..8] =='broadcast'
-            elsif message.text[0..8] == 'usercount'
 
+            elsif message.text[0..8] == 'usercount'
 
             end
           end
