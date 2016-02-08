@@ -84,10 +84,10 @@ class DBController
   def get_all_users
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
-      rs = con.query("SELECT chatid FROM telegramusers;")
+      rs = con.query("SELECT * FROM telegramusers;")
       users = []
       rs.each do |row|
-        users.push(row)
+        users.push({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
       end
       return users
     rescue Mysql::Error => e

@@ -12,7 +12,6 @@ require_relative 'config'
 class MainScenario
 
 
-
   #emoji list http://apps.timwhitlock.info/emoji/tables/unicode
   @@unreg_commands = ["\xF0\x9F\x86\x93Свободные аудитории","\xF0\x9F\x9A\xB6Карта","\xF0\x9F\x94\xA2Список функций",
                     "\xF0\x9F\x93\xB0Новости","\xF0\x9F\x98\x82Шутки","\xE2\x9D\x93Обратная связь","\xF0\x9F\x93\x9DРегистрация"]
@@ -206,18 +205,25 @@ class Telegram_handler
     admin_id=Config.admin_id
     #time options yesterday,today,tomorrow,the day after tomorrow,date
     msc=MainScenario.new
+    dbc=DBController.new
     Telegram::Bot::Client.run(token) do |bot|
       bot.listen do |message|
         begin
 
           if message.chat.id != admin_id
-            bot.api.sendMessage(chat_id: admin_id, text: "Message from:#{message.from.username},id:#{message.chat.id}
-                                               \nFirst,last name:#{message.from.first_name} #{message.from.last_name}\nText:#{message.text}")
+            bot.api.sendMessage(chat_id: admin_id, text: "Message from:#{message.from.username},id:#{message.chat.id}\nFirst,last name:#{message.from.first_name} #{message.from.last_name}\nText:#{message.text}")
           if message.chat.id == admin_id
             if message.text[0..8] =='broadcast'
-
+              broadcast_text = message[10..-1]
+              users = dbc.get_all_users
+              for u in users
+                bot.api.sendMessage(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
+              end
             elsif message.text[0..8] == 'usercount'
-
+              users = dbc.get_all_users
+              bot.api.sendMessage(chat_id: admin_id, text: users.join("\n"))
+            elsif message.text[0..8] == 'functions'
+              bot.api.sendMessage(chat_id: admin_id, text: "broadcast messagetext,usercount,functions")
             end
           end
 
