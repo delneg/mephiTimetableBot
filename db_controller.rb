@@ -4,7 +4,6 @@ class DBController
   @@host = Config.host
   @@password = Config.password
   @@dbname = Config.dbname
-  #TODO: create table if not present, add user if not added
   def get_user(id)
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
@@ -38,7 +37,24 @@ class DBController
         con.close if con
       end
   end
+  def update_user_all(id,context="main",type=nil,data=nil)
+    #TODO: if user already present, update instead of insert
+    begin
+      con = Mysql.new @@host, @@user, @@password, @@dbname
+      con.autocommit false
+      pst = con.prepare "UPDATE TELEGRAMUSERS SET CONTEXT = ?, TYPE = ?, DATA = ? WHERE CHATID = ?"
+      pst.execute "#{context}","#{type}","#{data}", "#{id}"
+      con.commit
+      return true
+    rescue Mysql::Error => e
+      con.rollback
+      return [e.errno,e.error]
+    ensure
+      con.close if con
+    end
+  end
   def add_user(id,context="main",type=nil,data=nil)
+    #TODO: work on mysql errors
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
       #con.query("CREATE TABLE IF NOT EXISTS TELEGRAMUSERS (CHATID INTEGER NOT NULL, CONTEXT VARCHAR(40), TYPE BOOLEAN, DATA VARCHAR(100), PRIMARY KEY (CHATID))")
@@ -58,7 +74,7 @@ class DBController
       rs.each do |q_result|
         returned_string += q_result.to_s.force_encoding('UTF-8')
       end
-      return returnedStr
+      return returned_string
     rescue Mysql::Error => e
       return [e.errno,e.error]
     ensure
@@ -78,6 +94,22 @@ class DBController
       return [e.errno,e.error]
     ensure
       con.close if con
+    end
+  end
+  def groupcheck(group)
+    regex = /(А|Б|В|Е|К|М|Р|С|Т|У|Ф)(?!00)(?!1[3-9])((0|1)[0-9])[-][а-яА-Я0-9]{2,3}/
+    if regex.match(group)
+      true
+    else
+      false
+    end
+  end
+  def familynamecheck(familyname)
+    regex= /([А-я]+-[А-я]+ [А-я]\.[А-я]\.|[А-я,ё]+ [А-я]\.[А-я]\.)/
+    if regex.match(familyname)
+      true
+    else
+      false
     end
   end
 end

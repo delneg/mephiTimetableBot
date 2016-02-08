@@ -8,6 +8,7 @@ require_relative 'db_controller'
 require_relative 'config'
 #TODO: set timeout for request - 5 sec
 #TODO: keyboards
+#TODO: html markup
 class MainScenario
 
 
@@ -60,9 +61,9 @@ class MainScenario
 
       when @@unreg_commands[4]#jokes
 
+        dbc.update_user_context(id,'jokes')
         invite = "Случайные шутки или шутки определенного преподавателя?\xF0\x9F\x8E\x93"
         keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Случайные","Преподаватель"]+@@menu_button, one_time_keyboard: false)
-        dbc.update_user_context(id,'jokes')
         return invite,keyboard
 
       when @@unreg_commands[5]#feedback
@@ -70,6 +71,11 @@ class MainScenario
         return Messages.start_message,main_keyboard
 
       when @@unreg_commands[6]#registration
+
+        dbc.update_user_context(id,'registration')
+        invite = "Давайте вас зарегистрируем.В дальнейшем вы сможете изменить все данные в настройках.\nВы преподаватель или студент?"
+        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Студент","Преподаватель"]+@@menu_button, one_time_keyboard: false)
+        return invite,keyboard
 
       when @@reg_commands[0]#timetable
 
@@ -103,9 +109,9 @@ class MainScenario
           dbc.update_user_context(id,'main')
           return df.joke,main_keyboard
         elsif message=="Преподаватель"
+          dbc.update_user_context(id,'jokes_tutor')
           invite = "Введите фамилию преподавателя\xF0\x9F\x8E\xAB"
           keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
-          dbc.update_user_context(id,'jokes_tutor')
           return invite,keyboard
         else
           return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
@@ -145,11 +151,45 @@ class MainScenario
 
       elsif user_info[:context]=="registration"
 
+        if message=="Студент"
+          dbc.update_user_context(id,'registration_student')
+          invite = "Хорошо, введите, пожалуйста, свою группу в формате К01-121"
+          keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+          return invite,keyboard
+        elsif message=="Преподаватель"
+          dbc.update_user_context(id,'registration_tutor')
+          invite = "Хорошо, введите, пожалуйста, свои ФИО в формате Фамилия И.О.(Пример:Теляковский Д.С.)"
+          keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+          return invite,keyboard
+        else
+          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+        end
+      elsif user_info[:context]=="registration_student"
+
+        if dbc.groupcheck(message)
+          dbc.update_user_all(id,"main",false,message)
+          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Список функций"
+          return invite,main_keyboard
+        else
+          return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе группы - попробуйте еще раз (Пример:Ф05-120)\nЕсли проблема повторяется, напишите @TheDelneg"
+        end
+
+      elsif user_info[:context]=="registration_tutor"
+
+        if dbc.familynamecheck(message)
+          dbc.update_user_all(id,"main",true,message)
+          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Список функций"
+          return invite,main_keyboard
+        else
+          return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе ФИО - попробуйте еще раз (Пример:Сандаков Е.Б.)\nЕсли проблема повторяется, напишите @TheDelneg"
+        end
+
       elsif user_info[:context]=="settings"
 
       elsif user_info[:context]=="main"
         return Messages.not_recognized_message,main_keyboard
       end
+
     else
       return Messages.not_recognized_message
     end
@@ -159,6 +199,7 @@ end
 
 
 class Telegram_handler
+  #TODO: Logging
   def mainloop
     token=Config.token
     filename = "mephiBot log #{Time.now.strftime('%d.%m.%Y %H:%M:%S')}.txt"
@@ -182,7 +223,8 @@ class Telegram_handler
 
           if message.text == '/start'
             bot.api.sendMessage(chat_id:message.chat.id,text:Messages.start_message, reply_markup:msc.main_keyboard)
-          elsif message.text == "\xF0\x9F\x9A\xB6Карта"
+            bot.api.sendMessage(chat_id:message.chat.id,text:Messages.in_development, reply_markup:msc.main_keyboard)
+          elsif UnicodeUtils.downcase(message.text).include? UnicodeUtils.downcase("Карта")
             bot.api.send_photo(chat_id: message.chat.id, photo: File.new('/root/mephitimetablebot/mephimap.jpg'))
           else
             message_handling = msc.handle_message(message.text,message.chat.id)
