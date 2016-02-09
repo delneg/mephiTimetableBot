@@ -6,11 +6,13 @@ require_relative 'messages'
 require_relative 'data_fetcher'
 require_relative 'db_controller'
 require_relative 'config'
+require_relative 'timetable_fetcher'
 #TODO: set timeout for request - 5 sec
 #TODO: keyboards
 #TODO: html markup
 #TODO: db query
-#TODO: decide what timetable variants do we offer ( mind the short names )
+#TODO: auto-increment groups in DB
+#TODO: add menu, when keyboard is hidden
 class MainScenario
 
 
@@ -80,12 +82,18 @@ class MainScenario
         return invite,keyboard
 
       when @@reg_commands[0]#timetable
-
-        dbc.update_user_context(id,'timetable')
-        variants = ['Мое сегодня','Группа','Преподаватель','Аудитория','Другие']
-        invite = "Выберите, пожалуйста, тип показа расписания:"
-        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
-        return invite,keyboard
+        user_info = dbc.get_user(id)
+        if user_info==nil
+          return Messages.please_register,main_keyboard
+        elsif user_info[:data]==''
+          return Messages.please_register,main_keyboard
+        else
+          dbc.update_user_context(id,'timetable')
+          variants = [['Моё сегодня'],['Группа','Преподаватель'],['Аудитория','Др. моё']]
+          invite = 'Выберите, пожалуйста, тип показа расписания:'
+          keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
+          return invite,keyboard
+        end
 
       when @@reg_commands[1]#settings
 
@@ -116,6 +124,7 @@ class MainScenario
   def context_check(message,id)
     dbc=DBController.new
     df=DataFetcher.new
+    tf=TimetableFetcher.new
     user_info = dbc.get_user(id)
     if user_info != nil
       if user_info[:context]=="free_auditories"
@@ -129,8 +138,45 @@ class MainScenario
         end
 
       elsif user_info[:context]=="timetable"
+        case message
+          when 'Моё сегодня'
+            dbc.update_user_context(id,'main')
+            time = tf.time_array_form(:today)
+            user=dbc.get_user(id)
+            if user[:type]=='1'
+              return tf.get_timetable(:tutor,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            else
+              return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            end
 
-
+          when 'Группа'
+            dbc.update_user_context(id,'timetable_group')
+            invite = "Введите группу:"
+            keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+            return invite,keyboard
+          when 'Преподаватель'
+            dbc.update_user_context(id,'timetable_tutor')
+            invite = "Введите фамилию преподавателя\xF0\x9F\x8E\xAB:"
+            keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+            return invite,keyboard
+          when 'Аудитория'
+            dbc.update_user_context(id,'timetable_auditory')
+            invite = "Введите аудиторию (Пример:303 или К-417)"
+            keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+            return invite,keyboard
+          when 'Др. моё'
+            dbc.update_user_context(id,'timetable_other')
+            variants = [["Вчера","Сегодня","Завтра"],["Послезавтра","Дата","Неделя"]]
+            invite = "Вы можете получить своё расписание на вчера, сегодня, завтра, послезавтра, на неделю или на конкретную дату"
+            keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
+            return invite,keyboard
+          else
+            return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+        end
+      elsif user_info[:context]=="timetable_group"
+      elsif user_info[:context]=="timetable_tutor"
+      elsif user_info[:context]=="timetable_auditory"
+      elsif user_info[:context]=="timetable_other"
       elsif user_info[:context]=="jokes"
         if message =="Случайные"
           dbc.update_user_context(id,'main')
@@ -294,7 +340,7 @@ class Telegram_handler
                 end
               elsif message.text[0..8] == 'usercount'
                 users = dbc.get_all_users
-                bot.api.send_message(chat_id: admin_id, text: users.join("\n"))
+                bot.api.send_message(chat_id: admin_id, text: users)
               elsif message.text[0..8] == 'functions'
                 bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,functions")
               end

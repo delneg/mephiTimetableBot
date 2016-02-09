@@ -38,7 +38,7 @@ class TimetableEvent
     @note = json['note']
   end
   def to_s
-    "#{(Time.at(@start_time)-3*60*60).strftime("%H:%M")}-#{(Time.at(@end_time)-3*60*60).strftime("%H:%M")} #{@title}, #{type} ведет #{@teachers}  в #{@auditories}   Примечание:#{note}"
+    "#{(Time.at(@start_time)-3*60*60).strftime("%H:%M")}-#{(Time.at(@end_time)-3*60*60).strftime("%H:%M")} #{@title}, #{type} ведет #{@teachers}  в #{@auditories.gsub(":",",")}   Примечание:#{note}"
   end
   def allinfo
     "#{(Time.at(@start_time)-3*60*60).strftime("%H:%M")}-#{(Time.at(@end_time)-3*60*60).strftime("%H:%M")}  #{@title} - это  #{@type}\nПроходит в #{@auditories.join(',')} у групп #{@groups},занятие ведет(ут) #{@teachers} \nПримечание - #{@note} \n"

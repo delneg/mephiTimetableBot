@@ -119,7 +119,12 @@ class DBController
       rs.each do |row|
         users.push({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
       end
-      return users.force_encoding('UTF-8')
+      returned_string =''
+      users.each do |user|
+        returned_string+="ID:#{user[:id]},context:#{user[:context]},type:#{if user[:type]=='1';"Преподаватель" else "Студент" end},data:#{user[:data].force_encoding('UTF-8')}\n"
+      end
+      returned_string+="\n#{'-'*10}\nTotal:#{users.count} users"
+      return returned_string
     rescue Mysql::Error => e
       return [e.errno,e.error]
     ensure
