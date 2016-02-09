@@ -2,7 +2,6 @@ require_relative 'messages'
 require 'vkontakte_api'
 require 'googl'
 require 'uri'
-require 'openssl'
 class Joke
   def id
     @id
@@ -50,7 +49,7 @@ class DataFetcher
 
       encoded_url = URI.encode(url)
       begin
-        data = open(encoded_url,:read_timeout=>5).read
+        data = open(encoded_url,:read_timeout=>7).read
       rescue Exception => e
         puts e
         return Messages.server_timeout
@@ -76,15 +75,12 @@ class DataFetcher
       text_links = URI.extract(text)
       replacements = []
       for l in text_links[0..-1]
-        puts l
         url = Googl.shorten(l,nil,Config.google_api_key).short_url
-        puts url
         replacements.push([l,url])
       end
       replacements.each {|replacement| text.gsub!(replacement[0], replacement[1])}
-
       rescue Exception => e
-        puts ''
+        puts e.to_s
       ensure
         returned_string+="#{'-'*5}Новость от #{time}\nСсылка: #{link}\n#{text}\n"
       end
@@ -165,3 +161,4 @@ class DataFetcher
     return returned_string
   end
 end
+

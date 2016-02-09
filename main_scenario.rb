@@ -31,13 +31,12 @@ class MainScenario
     found = ""
     df=DataFetcher.new
     dbc=DBController.new
-    for command in @@unreg_commands+@@reg_commands
+    for command in @@unreg_commands+@@reg_commands+@@menu_button
       if UnicodeUtils.downcase(message).include? UnicodeUtils.downcase(command[1..-1])
         found = command
         break
       end
     end
-    puts found
     #if found == ""
       #return Messages.not_recognized_message
     #end
@@ -81,17 +80,19 @@ class MainScenario
         return invite,keyboard
 
       when @@reg_commands[0]#timetable
+
         dbc.update_user_context(id,'timetable')
-        variants = ['todayme','group','tutor','auditory','otherme']
+        variants = ['Мое сегодня','Группа','Преподаватель','Аудитория','Другие']
         invite = "Выберите, пожалуйста, тип показа расписания:"
-        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Студент","Преподаватель"]+@@menu_button, one_time_keyboard: false)
+        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
         return invite,keyboard
 
       when @@reg_commands[1]#settings
+
         user_info = dbc.get_user(id)
         if user_info==nil
           return Messages.please_register,main_keyboard
-        elsif user_info[:data]
+        elsif user_info[:data]==''
           return Messages.please_register,main_keyboard
         else
           dbc.update_user_context(id,'settings')
@@ -99,8 +100,16 @@ class MainScenario
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Изменить тип","Изменить данные"]+@@menu_button, one_time_keyboard: false)
           return invite,keyboard
         end
+
+      when @@menu_button[0]#menu
+
+        dbc.update_user_context(id,'main')
+        return Messages.menu_message,main_keyboard
+
       else
+
         return context_check(message,id)
+
     end
 
   end
@@ -123,7 +132,6 @@ class MainScenario
 
 
       elsif user_info[:context]=="jokes"
-
         if message =="Случайные"
           dbc.update_user_context(id,'main')
           return df.joke,main_keyboard
@@ -148,7 +156,7 @@ class MainScenario
         if found.count==1
           dbc.update_user_context(id,'main')
           return df.joke(false,10,found[0]),main_keyboard
-        elsif found>1
+        elsif found.count>1
           dbc.update_user_context(id,'jokes_tutor_multiple')
           invite = "Найдено несколько преподавателей с такой фамилией. Выберите одного из них:\n#{found.join(',')}"
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:found.each_slice(2).to_a+@@menu_button, one_time_keyboard: false)
@@ -197,7 +205,7 @@ class MainScenario
 
         if dbc.familynamecheck(message)
           dbc.update_user_all(id,"main",true,message)
-          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Функции"
+          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2 /Функции"
           return invite,main_keyboard
         else
           return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе ФИО - попробуйте еще раз (Пример:Сандаков Е.Б.)\nЕсли проблема повторяется, напишите @TheDelneg"
@@ -208,17 +216,19 @@ class MainScenario
         if message=="Изменить тип"
           dbc.update_user_type(id)
           now = dbc.get_user(id)
-          if now[:type]
-            invite = "Тип успешно изменен\xE2\x9C\x85\nТеперь вы преподаватель"
+          if now[:type]=='1'
+            invite = "Тип успешно изменен\xE2\x9C\x85\nТеперь вы преподаватель\nВведите, пожалуйста, свои ФИО в формате Фамилия И.О.(Пример:Теляковский Д.С.)"
           else
-            invite = "Тип успешно изменен\xE2\x9C\x85Теперь вы студент"
+            invite = "Тип успешно изменен\xE2\x9C\x85Теперь вы студент\nВведите, пожалуйста, свою группу в формате К01-121"
           end
-          return invite,main_keyboard
+          dbc.update_user_context(id,'settings_data')
+          keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+          return invite,keyboard
 
         elsif message=="Изменить данные"
           dbc.update_user_context(id,'settings_data')
           user = dbc.get_user(id)
-          if user[:type]
+          if user[:type]=='1'
             invite = "Хорошо, введите, пожалуйста, свои ФИО в формате Фамилия И.О.(Пример:Теляковский Д.С.)"
           else
             invite = "Хорошо, введите, пожалуйста, свою группу в формате К01-121"
@@ -232,7 +242,7 @@ class MainScenario
       elsif user_info[:context]=="settings_data"
 
         user = dbc.get_user(id)
-        if user[:type]
+        if user[:type]=='1'
           check = dbc.familynamecheck(message)
         else
           check =dbc.groupcheck(message)
@@ -267,6 +277,7 @@ class Telegram_handler
     #time options yesterday,today,tomorrow,the day after tomorrow,date
     msc=MainScenario.new
     dbc=DBController.new
+    file = "mephiBot log #{Time.now.strftime('%d.%m.%Y %H:%M:%S')}.txt"
     Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
 
       bot.listen do |message|
@@ -297,7 +308,11 @@ class Telegram_handler
               bot.api.send_photo(chat_id: message.chat.id, photo: File.new('/Users/Delneg/Downloads/mephimap.jpg'))
             else
               message_handling = msc.handle_message(message.text,message.chat.id)
-              bot.api.send_message(chat_id:message.chat.id,text:message_handling[0], reply_markup:message_handling[1],disable_web_page_preview:true)
+              if message_handling.is_a?([].class)
+                bot.api.send_message(chat_id:message.chat.id,text:message_handling[0], reply_markup:message_handling[1],disable_web_page_preview:true)
+              else
+                bot.api.send_message(chat_id:message.chat.id,text:message_handling,disable_web_page_preview:true)
+              end
           end
 
         rescue Exception => e
@@ -308,7 +323,7 @@ class Telegram_handler
   end
   end
 end
-
+OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
 th=Telegram_handler.new
 th.mainloop
 

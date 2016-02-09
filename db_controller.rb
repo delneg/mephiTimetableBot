@@ -21,15 +21,15 @@ class DBController
   end
   def update_user_context(id,context)
       if get_user(id)==nil
-        res = add_user(id)
+        res = add_user(id,context)
       end
       begin
         con = Mysql.new @@host, @@user, @@password, @@dbname
-            con.autocommit false
-            pst = con.prepare "UPDATE telegramusers SET context = ? WHERE ChatId = ?"
-            pst.execute "#{context}", "#{id}"
-            con.commit
-            return true
+        con.autocommit false
+        pst = con.prepare "UPDATE telegramusers SET context = ? WHERE ChatId = ?"
+        pst.execute "#{context}", "#{id}"
+        con.commit
+        return true
       rescue Mysql::Error => e
         con.rollback
         return [e.errno,e.error]
@@ -87,7 +87,8 @@ class DBController
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
       #con.query("CREATE TABLE IF NOT EXISTS TELEGRAMUSERS (CHATID INTEGER NOT NULL, CONTEXT VARCHAR(40), TYPE BOOLEAN, DATA VARCHAR(100), PRIMARY KEY (CHATID))")
-      con.query("INSERT INTO telegramusers(ChatId,context,type,data) VALUES(#{id},'#{context}',#{type},'#{data}')")
+      q="INSERT INTO telegramusers (ChatId,context,type,data) VALUES('#{id}','#{context}','#{type}','#{data}')"
+      con.query(q)
       return true
     rescue Mysql::Error => e
       return [e.errno,e.error]
@@ -118,7 +119,7 @@ class DBController
       rs.each do |row|
         users.push({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
       end
-      return users
+      return users.force_encoding('UTF-8')
     rescue Mysql::Error => e
       return [e.errno,e.error]
     ensure
