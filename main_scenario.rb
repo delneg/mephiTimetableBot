@@ -14,6 +14,8 @@ require_relative 'timetable_fetcher'
 #TODO: auto-increment groups in DB
 #TODO: add menu, when keyboard is hidden
 #TODO: обр. связь и св. ауитории в функциях измениь
+#TODO: избранное
+
 class MainScenario
 
 
@@ -143,7 +145,6 @@ class MainScenario
           return invite,keyboard
         when 'Преподаватель'
           dbc.update_user_context(id,'timetable_tutor')
-          #TODO: teachers check like in jokes
           variants = [["Вчера","Сегодня","Завтра"],["Послезавтра","Дата","Неделя"]]
           invite = "Вы можете получить расписание для преподавателя на вчера, сегодня, завтра, послезавтра, на неделю или на конкретную дату"
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
@@ -184,7 +185,7 @@ class MainScenario
       end
       keyboard =Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
       return invite,keyboard
-      #TODO: check for teacher as in jokes, check for auditory if in auditories,check for group with regex
+      #TODO: check for teacher as in jokes,update context to main after finishing
 
     elsif user_info[:context].include? "timetable_group_"
       check = ""
@@ -229,8 +230,6 @@ class MainScenario
 
 
     elsif user_info[:context].include? "timetable_auditory_"
-
-
       check = ""
       if user_info[:context]=="timetable_auditory_date"
         begin
@@ -272,19 +271,110 @@ class MainScenario
         return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе аудитории - попробуйте еще раз (Пример:303 или К-417,Б-100)\nЕсли проблема повторяется, напишите @TheDelneg"
       end
 
+    elsif user_info[:context].include? "timetable_tutor_"
+      check = ""
+      if user_info[:context]=="timetable_tutor_date"
+        begin
+          check = message[0..message.index(' ')-1]
+        rescue NoMethodError
+          return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе фамилии - попробуйте еще раз (Пример:Сандаков)\nЕсли проблема повторяется, напишите @TheDelneg"
+        end
+      else
+        check = message
+      end
 
-    elsif user_info[:context]=="timetable_tutor_today"
-    elsif user_info[:context]=="timetable_tutor_yesterday"
-    elsif user_info[:context]=="timetable_tutor_tomorrow"
-    elsif user_info[:context]=="timetable_tutor_day_after_tomorrow"
-    elsif user_info[:context]=="timetable_tutor_week"
-    elsif user_info[:context]=="timetable_tutor_date"
-    elsif user_info[:context]=="timetable_auditory_today"
-    elsif user_info[:context]=="timetable_auditory_yesterday"
-    elsif user_info[:context]=="timetable_auditory_tomorrow"
-    elsif user_info[:context]=="timetable_auditory_day_after_tomorrow"
-    elsif user_info[:context]=="timetable_auditory_week"
-    elsif user_info[:context]=="timetable_auditory_date"
+      tutors = Messages.teachers
+      found = []
+      for t in tutors
+        if UnicodeUtils.downcase(t[0..t.index(' ')-1])==UnicodeUtils.downcase(check) or UnicodeUtils.downcase(t)==UnicodeUtils.downcase(check)
+          found.push(t)
+        end
+      end
+
+      if found.count==1
+        dbc.update_user_context(id,"main")
+        if user_info[:context]=="timetable_tutor_today"
+          time=tf.time_array_form(:today)
+          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+        elsif user_info[:context]=="timetable_tutor_yesterday"
+          time=tf.time_array_form(:yesterday)
+          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+        elsif user_info[:context]=="timetable_tutor_tomorrow"
+          time=tf.time_array_form(:tomorrow)
+          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+        elsif user_info[:context]=="timetable_tutor_day_after_tomorrow"
+          time=tf.time_array_form(:day_after_tomorrow)
+          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+        end
+        if user_info[:context]=="timetable_tutor_week"
+          return tf.get_week_timetable(:tutor,found[0].force_encoding('UTF-8')),main_keyboard
+        elsif user_info[:context]=="timetable_tutor_date"
+          begin
+            time=tf.time_for_date(message[message.index(' ')+1..-1])
+          rescue ArgumentError
+            return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе даты - попробуйте еще раз (Пример:23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
+          end
+          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+        end
+      elsif found.count>1
+        dbc.update_user_context(id,'timetable_multiple_tutor_'+user_info[:context][user_info[:context].index("tutor_")+6..-1])
+        if user_info[:context]=="timetable_tutor_date"
+          invite = "Найдено несколько преподавателей с такой фамилией. Введите ФИО одного из них и дату через пробел (Пример:Тронин Иван Владимирович 23.02.2016):\n#{found.join(',')}"
+          keyboard =Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
+        else
+          invite = "Найдено несколько преподавателей с такой фамилией. Выберите одного из них:\n#{found.join(',')}"
+          keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:found.each_slice(2).to_a+@@menu_button, one_time_keyboard: false)
+        end
+        return invite,keyboard
+      else
+        return Messages.teacher_not_found
+      end
+
+
+    elsif user_info[:context].include? "timetable_multiple_tutor_"
+      check = ""
+      if user_info[:context]=="timetable_multiple_tutor_date"
+        begin
+          check = message[0..message.rindex(' ')-1]
+        rescue NoMethodError
+          return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку фамилии - попробуйте еще раз (Пример:Тронин Иван Владимирович 23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
+        end
+      else
+        check = message
+      end
+      tutors = Messages.teachers
+      for t in tutors
+        if UnicodeUtils.downcase(t)==UnicodeUtils.downcase(check)
+          dbc.update_user_context(id,'main')
+
+          if user_info[:context]=="timetable_multiple_tutor_today"
+            time=tf.time_array_form(:today)
+            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+          elsif user_info[:context]=="timetable_multiple_tutor_yesterday"
+            time=tf.time_array_form(:yesterday)
+            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+          elsif user_info[:context]=="timetable_tutor_tomorrow"
+            time=tf.time_array_form(:tomorrow)
+            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+          elsif user_info[:context]=="timetable_tutor_day_after_tomorrow"
+            time=tf.time_array_form(:day_after_tomorrow)
+            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+          end
+          if user_info[:context]=="timetable_tutor_week"
+            return tf.get_week_timetable(:tutor,message.force_encoding('UTF-8')),main_keyboard
+          elsif user_info[:context]=="timetable_tutor_date"
+            tut = message[0..message.rindex(' ')-1]
+            begin
+              time=tf.time_for_date(message[message.rindex(' ')+1..-1])
+            rescue ArgumentError
+              return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе даты - попробуйте еще раз (Пример:23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
+            end
+            return tf.get_timetable(:tutor,tut.force_encoding('UTF-8'),time),main_keyboard
+          end
+        end
+      end
+      return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+
     elsif user_info[:context]=="timetable_other" #send after time
       case message
         when "Вчера"
