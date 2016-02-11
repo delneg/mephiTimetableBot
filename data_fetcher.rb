@@ -143,7 +143,7 @@ class DataFetcher
       if not buildings.include? building
         return Messages.building_not_free
       else
-        returned_string=building+"\n"
+        returned_string="\xF0\x9F\x8F\xA2"+building+"\n"
         for i in 0..free_auditories.count-1
           this = free_auditories[i]
           if building == "Главный"
