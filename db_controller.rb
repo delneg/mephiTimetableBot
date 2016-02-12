@@ -7,7 +7,7 @@ class DBController
   def get_user(id)
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
-      rs = con.query("SELECT * FROM telegramusers WHERE ChatId='#{id}';")
+      rs = con.query("SELECT * FROM TELEGRAMUSERS WHERE ChatId='#{id}';")
       row= rs.fetch_row
       if row==nil
         return nil
@@ -26,7 +26,7 @@ class DBController
       begin
         con = Mysql.new @@host, @@user, @@password, @@dbname
         con.autocommit false
-        pst = con.prepare "UPDATE telegramusers SET context = ? WHERE ChatId = ?"
+        pst = con.prepare "UPDATE TELEGRAMUSERS SET context = ? WHERE ChatId = ?"
         pst.execute "#{context}", "#{id}"
         con.commit
         return true
@@ -87,7 +87,7 @@ class DBController
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
       #con.query("CREATE TABLE IF NOT EXISTS TELEGRAMUSERS (CHATID INTEGER NOT NULL, CONTEXT VARCHAR(40), TYPE BOOLEAN, DATA VARCHAR(100), PRIMARY KEY (CHATID))")
-      q="INSERT INTO telegramusers (ChatId,context,type,data) VALUES('#{id}','#{context}','#{type}','#{data}')"
+      q="INSERT INTO TELEGRAMUSERS (ChatId,context,type,data) VALUES('#{id}','#{context}','#{type}','#{data}')"
       con.query(q)
       return true
     rescue Mysql::Error => e
@@ -116,7 +116,7 @@ class DBController
   def get_all_users
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
-      rs = con.query("SELECT * FROM telegramusers;")
+      rs = con.query("SELECT * FROM TELEGRAMUSERS;")
       users = []
       rs.each do |row|
         users.push({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
@@ -131,7 +131,7 @@ class DBController
   def usercount
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
-      rs = con.query("SELECT * FROM telegramusers;")
+      rs = con.query("SELECT * FROM TELEGRAMUSERS;")
       users = []
       rs.each do |row|
         users.push({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
