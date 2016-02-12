@@ -121,6 +121,21 @@ class DBController
       rs.each do |row|
         users.push({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
       end
+      return users
+    rescue Mysql::Error => e
+      return [e.errno,e.error]
+    ensure
+      con.close if con
+    end
+  end
+  def usercount
+    begin
+      con = Mysql.new @@host, @@user, @@password, @@dbname
+      rs = con.query("SELECT * FROM telegramusers;")
+      users = []
+      rs.each do |row|
+        users.push({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
+      end
       returned_string =''
       users.each do |user|
         returned_string+="ID:#{user[:id]},context:#{user[:context]},type:#{if user[:type]=='1';"Преподаватель" else "Студент" end},data:#{user[:data].force_encoding('UTF-8')}\n"

@@ -93,7 +93,7 @@ class DataFetcher
     url = "http://timetable.mephist.ru/getEvents.php?rType=json&get=freeAuditories&start=#{start_time}&end=#{end_time}"
     encoded_url = URI.encode(url)
     begin
-      data = JSON.parse(open(encoded_url,:read_timeout=>5).read)
+      data = JSON.parse(open(encoded_url,:read_timeout=>7).read)
     rescue Exception => e
       puts e
       return Messages.server_timeout

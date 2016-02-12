@@ -7,11 +7,9 @@ require_relative 'data_fetcher'
 require_relative 'db_controller'
 require_relative 'config'
 require_relative 'timetable_fetcher'
-#TODO: set timeout for request - 5 sec
 #TODO: keyboards
 #TODO: html markup
 #TODO: auto-increment groups in DB
-#TODO: add menu, when keyboard is hidden
 #TODO: обр. связь и св. ауитории в функциях измениь
 #TODO: избранное
 #TODO: logfile admin command instead of just message me
@@ -162,7 +160,7 @@ class MainScenario
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
           return invite,keyboard
         else
-          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
       end
 
     elsif user_info[:context]=="timetable_group" or user_info[:context]=="timetable_tutor" or user_info[:context]=="timetable_auditory"
@@ -181,7 +179,7 @@ class MainScenario
           invite+=",а также дату в формате дд.мм.гггг (10.02.2016) через пробел"
         end
       else
-        return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+        return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
       end
       keyboard =Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
       return invite,keyboard
@@ -371,7 +369,7 @@ class MainScenario
           end
         end
       end
-      return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+      return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
 
     elsif user_info[:context]=="timetable_other" #send after time
       case message
@@ -425,7 +423,7 @@ class MainScenario
             return tf.get_week_timetable(:group,user[:data].force_encoding('UTF-8')),main_keyboard
           end
         else
-          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
       end
     elsif user_info[:context]=="timetable_other_date"
       begin
@@ -438,7 +436,7 @@ class MainScenario
           return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
         end
       rescue ArgumentError
-        return "Простите, я не понимаю.Пример:10.02.2016\nПопробуйте еще раз!\xF0\x9F\x98\xA5"
+        return "Простите, я не понимаю.Пример:10.02.2016\nПопробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
       end
     end
   end
@@ -471,7 +469,7 @@ class MainScenario
           keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
           return invite,keyboard
         else
-          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
         end
 
       elsif user_info[:context]=="jokes_tutor"
@@ -504,7 +502,7 @@ class MainScenario
             return df.joke(false,10,t),main_keyboard
           end
         end
-        return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+        return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
 
       elsif user_info[:context]=="registration"
 
@@ -566,7 +564,7 @@ class MainScenario
           keyboard = Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
           return invite,keyboard
         else
-          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5"
+          return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
         end
 
       elsif user_info[:context]=="settings_data"
@@ -606,7 +604,7 @@ class Telegram_handler
     #time options yesterday,today,tomorrow,the day after tomorrow,date
     msc=MainScenario.new
     dbc=DBController.new
-    file = "mephiBot log #{Time.now.strftime('%d.%m.%Y %H:%M:%S')}.txt"
+    file = "mephiBot log.txt"
     Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
 
       bot.listen do |message|
@@ -616,23 +614,25 @@ class Telegram_handler
             bot.logger.info("Detected admin message")
               if message.text[0..8] =='broadcast'
 
-                broadcast_text = message[10..-1]
+                broadcast_text = message.text[10..-1]
                 users = dbc.get_all_users
                 bot.logger.info("Sending broadcast message to #{users.count} users")
                 users.each do |u|
                   bot.api.send_message(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
                 end
               elsif message.text[0..8] == 'usercount'
-                users = dbc.get_all_users
-                bot.logger.info("Selected #{users.count} users")
+                users = dbc.usercount
+                bot.logger.info("Sending usercount")
                 bot.api.send_message(chat_id: admin_id, text: users)
               elsif message.text[0..4]== 'query'
                 query = message.text[6..-1]
                 bot.logger.info("Doing query #{query}")
                 bot.api.send_message(chat_id: admin_id, text: dbc.do_db_query(query))
+              elsif message.text[0..3]=='logs'
+                bot.api.send_document(chat_id: admin_id, document:File.new(file))
               elsif message.text[0..8] == 'functions'
                 bot.logger.info("Sending functions")
-                bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,query querytext,functions")
+                bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,query querytext,logs,functions")
               end
           end
 
