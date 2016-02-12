@@ -12,7 +12,6 @@ require_relative 'timetable_fetcher'
 #TODO: auto-increment groups in DB
 #TODO: обр. связь и св. ауитории в функциях измениь
 #TODO: избранное
-#TODO: logfile admin command instead of just message me
 #TODO: teacher names(?)
 class MainScenario
 
@@ -448,8 +447,8 @@ class MainScenario
       if user_info[:context]=="free_auditories"
 
         auds = df.free_auditories(message)
+        dbc.update_user_context(id,'main')
         if auds == Messages.building_not_free
-          dbc.update_user_context(id,'main')
           return auds
         else
           return auds,main_keyboard
