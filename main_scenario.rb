@@ -78,7 +78,6 @@ class MainScenario
         return invite,keyboard
 
       when @@reg_commands[0]#timetable
-        #TODO: registration is needed only for your timetable
           dbc.update_user_context(id,'timetable')
           variants = [['Моё сегодня'],['Группа','Преподаватель'],['Аудитория','Др. моё']]
           invite = 'Выберите, пожалуйста, тип показа расписания:'
@@ -605,7 +604,7 @@ class Telegram_handler
     msc=MainScenario.new
     dbc=DBController.new
     file = "mephiBot log.txt"
-    Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
+    Telegram::Bot::Client.run(token,logger: Logger.new(file)) do |bot|
 
       bot.listen do |message|
         begin
@@ -641,9 +640,9 @@ class Telegram_handler
               bot.api.send_message(chat_id:message.chat.id,text:Messages.start_message, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
               bot.api.send_message(chat_id:message.chat.id,text:Messages.in_development, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
           elsif UnicodeUtils.downcase(message.text).include? UnicodeUtils.downcase("Карта")
-            path = '/Users/Delneg/Downloads/mephimap.jpg'
+            #path = '/Users/Delneg/Downloads/mephimap.jpg'
+            path = '/root/mephitimetablebot/mephimap.jpg'
             bot.logger.info("Sending map from the path #{path}")
-            #TODO: change folder back /root/mephitimetablebot/
               bot.api.send_photo(chat_id: message.chat.id, photo: File.new(path))
           else
               bot.logger.info("Sending message to message handling")
@@ -669,7 +668,7 @@ class Telegram_handler
   end
   end
 end
-OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
+#OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
 th=Telegram_handler.new
 th.mainloop
 
