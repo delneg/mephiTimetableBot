@@ -10,14 +10,12 @@ require_relative 'timetable_fetcher'
 #TODO: set timeout for request - 5 sec
 #TODO: keyboards
 #TODO: html markup
-#TODO: db query
 #TODO: auto-increment groups in DB
 #TODO: add menu, when keyboard is hidden
 #TODO: обр. связь и св. ауитории в функциях измениь
 #TODO: избранное
-#TODO: обратная связь - отднльео сообщение
-#TODO: view my data in settings
-
+#TODO: logfile admin command instead of just message me
+#TODO: teacher names(?)
 class MainScenario
 
 
@@ -32,8 +30,6 @@ class MainScenario
     Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:@@unreg_commands[0..-2].each_slice(2).to_a+@@reg_commands.each_slice(2).to_a, one_time_keyboard: false)
   end
 
-
-
   def handle_message(message,id)
     found = ""
     df=DataFetcher.new
@@ -44,9 +40,6 @@ class MainScenario
         break
       end
     end
-    #if found == ""
-      #return Messages.not_recognized_message
-    #end
     case found
       when @@unreg_commands[0]#free auditories
 
@@ -77,7 +70,7 @@ class MainScenario
 
       when @@unreg_commands[5]#feedback
 
-        return Messages.start_message,main_keyboard
+        return Config.feedback,main_keyboard
 
       when @@unreg_commands[6]#registration
 
@@ -122,7 +115,7 @@ class MainScenario
 
     end
   end
-  def timetable_context_check(message,id,dbc,df,tf)
+  def timetable_context_check(message,id,dbc,tf)
     user_info = dbc.get_user(id)
 
     if user_info[:context]=="timetable"
@@ -467,7 +460,7 @@ class MainScenario
 
       elsif user_info[:context].index("timetable")!=nil
 
-        return timetable_context_check(message,id,dbc,df,tf)
+        return timetable_context_check(message,id,dbc,tf)
       elsif user_info[:context]=="jokes"
         if message =="Случайные"
           dbc.update_user_context(id,'main')
@@ -532,7 +525,7 @@ class MainScenario
 
         if dbc.groupcheck(message)
           dbc.update_user_all(id,"main",false,message)
-          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2/Функции"
+          invite = "Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2 /Функции"
           return invite,main_keyboard
         else
           return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе группы - попробуйте еще раз (Пример:Ф05-120)\nЕсли проблема повторяется, напишите @TheDelneg"
@@ -618,42 +611,59 @@ class Telegram_handler
 
       bot.listen do |message|
         begin
-          if message.chat.id != admin_id
-            bot.api.send_message(chat_id: admin_id, text: "Message from:#{message.from.username},id:#{message.chat.id}\nFirst,last name:#{message.from.first_name} #{message.from.last_name}\nText:#{message.text}")
-          end
+          bot.logger.info("Message from username:#{message.from.username},id:#{message.chat.id} First,last name:#{message.from.first_name} #{message.from.last_name} Text:#{message.text}")
           if message.chat.id == admin_id
+            bot.logger.info("Detected admin message")
               if message.text[0..8] =='broadcast'
+
                 broadcast_text = message[10..-1]
                 users = dbc.get_all_users
-                for u in users
+                bot.logger.info("Sending broadcast message to #{users.count} users")
+                users.each do |u|
                   bot.api.send_message(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
                 end
               elsif message.text[0..8] == 'usercount'
                 users = dbc.get_all_users
+                bot.logger.info("Selected #{users.count} users")
                 bot.api.send_message(chat_id: admin_id, text: users)
+              elsif message.text[0..4]== 'query'
+                query = message.text[6..-1]
+                bot.logger.info("Doing query #{query}")
+                bot.api.send_message(chat_id: admin_id, text: dbc.do_db_query(query))
               elsif message.text[0..8] == 'functions'
-                bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,functions")
+                bot.logger.info("Sending functions")
+                bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,query querytext,functions")
               end
           end
 
           if message.text == '/start'
+            bot.logger.info("Sending start message reply")
               bot.api.send_message(chat_id:message.chat.id,text:Messages.start_message, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
               bot.api.send_message(chat_id:message.chat.id,text:Messages.in_development, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
           elsif UnicodeUtils.downcase(message.text).include? UnicodeUtils.downcase("Карта")
+            path = '/Users/Delneg/Downloads/mephimap.jpg'
+            bot.logger.info("Sending map from the path #{path}")
             #TODO: change folder back /root/mephitimetablebot/
-              bot.api.send_photo(chat_id: message.chat.id, photo: File.new('/Users/Delneg/Downloads/mephimap.jpg'))
-            else
+              bot.api.send_photo(chat_id: message.chat.id, photo: File.new(path))
+          else
+              bot.logger.info("Sending message to message handling")
               message_handling = msc.handle_message(message.text,message.chat.id)
+
               if message_handling.is_a?([].class)
+                register_success="Поздравляю, вы зарегистрированы! Посмотрите \xF0\x9F\x94\xA2 /Функции"
+                if message_handling[0]==register_success
+                  bot.api.send_message(chat_id: admin_id, text: "New user - username:#{message.from.username},id:#{message.chat.id} First,last name:#{message.from.first_name} #{message.from.last_name} Data:#{message.text}")
+                end
                 bot.api.send_message(chat_id:message.chat.id,text:message_handling[0], reply_markup:message_handling[1],disable_web_page_preview:true)
               else
                 bot.api.send_message(chat_id:message.chat.id,text:message_handling,disable_web_page_preview:true)
               end
+
+              bot.logger.info("Sent message handling result")
           end
 
         rescue Exception => e
-          puts e.backtrace.join("\n")
-          bot.logger.warn("Exception #{e}")
+          bot.logger.warn("Exception #{e},backtrace:\n#{e.backtrace.join("\n")}")
         end
     end
   end

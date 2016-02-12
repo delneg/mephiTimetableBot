@@ -107,6 +107,8 @@ class DBController
       return returned_string
     rescue Mysql::Error => e
       return [e.errno,e.error]
+    rescue Exception => ee
+        return ee.to_s
     ensure
       con.close if con
     end
