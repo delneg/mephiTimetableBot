@@ -15,6 +15,8 @@ require_relative 'timetable_fetcher'
 #TODO: add menu, when keyboard is hidden
 #TODO: обр. связь и св. ауитории в функциях измениь
 #TODO: избранное
+#TODO: обратная связь - отднльео сообщение
+#TODO: view my data in settings
 
 class MainScenario
 
@@ -85,18 +87,13 @@ class MainScenario
         return invite,keyboard
 
       when @@reg_commands[0]#timetable
-        user_info = dbc.get_user(id)
-        if user_info==nil
-          return Messages.please_register,main_keyboard
-        elsif user_info[:data]==''
-          return Messages.please_register,main_keyboard
-        else
+        #TODO: registration is needed only for your timetable
           dbc.update_user_context(id,'timetable')
           variants = [['Моё сегодня'],['Группа','Преподаватель'],['Аудитория','Др. моё']]
           invite = 'Выберите, пожалуйста, тип показа расписания:'
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
           return invite,keyboard
-        end
+
 
       when @@reg_commands[1]#settings
 
@@ -106,8 +103,10 @@ class MainScenario
         elsif user_info[:data]==''
           return Messages.please_register,main_keyboard
         else
+          type="#{if user_info[:type]=='1';"преподаватель" else "студент" end}"
+          data_t="#{if user_info[:type]=='1';"ФИО" else "группой" end}"
           dbc.update_user_context(id,'settings')
-          invite = "Хотите сменить тип студент<->преподаватель или изменить свои данные(фио или группу)?"
+          invite = "В данный момент вы зарегистрированы как #{type.force_encoding('UTF-8')} c #{data_t.force_encoding('UTF-8')} #{user_info[:data].force_encoding('UTF-8')}\nХотите сменить тип студент<->преподаватель или изменить свои данные(ФИО или группу)?"
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Изменить тип","Изменить данные"]+@@menu_button, one_time_keyboard: false)
           return invite,keyboard
         end
@@ -129,6 +128,10 @@ class MainScenario
     if user_info[:context]=="timetable"
       case message
         when 'Моё сегодня'
+          if user_info[:data]==''
+            dbc.update_user_context(id,'main')
+            return Messages.please_register,main_keyboard
+          end
           dbc.update_user_context(id,'main')
           time = tf.time_array_form(:today)
           user=dbc.get_user(id)
@@ -156,6 +159,10 @@ class MainScenario
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
           return invite,keyboard
         when 'Др. моё'
+          if user_info[:data]==''
+            dbc.update_user_context(id,'main')
+            return Messages.please_register,main_keyboard
+          end
           dbc.update_user_context(id,'timetable_other')
           variants = [["Вчера","Сегодня","Завтра"],["Послезавтра","Дата","Неделя"]]
           invite = "Вы можете получить своё расписание на вчера, сегодня, завтра, послезавтра, на неделю или на конкретную дату"
@@ -176,7 +183,7 @@ class MainScenario
       end
       variants = {"Вчера"=>"yesterday","Сегодня"=>"today","Завтра"=>"tomorrow","Послезавтра"=>"day_after_tomorrow","Дата"=>"date","Неделя"=>"week"}
       if variants[message]!=nil
-        dbc.update_user_context(id,user_info[:context]+variants[message])
+        dbc.update_user_context(id,user_info[:context]+"_"+variants[message])
         if variants[message]=="date"
           invite+=",а также дату в формате дд.мм.гггг (10.02.2016) через пробел"
         end
@@ -185,8 +192,6 @@ class MainScenario
       end
       keyboard =Telegram::Bot::Types::ReplyKeyboardHide.new(hide_keyboard:true)
       return invite,keyboard
-      #TODO: check for teacher as in jokes,update context to main after finishing
-
     elsif user_info[:context].include? "timetable_group_"
       check = ""
       if user_info[:context]=="timetable_group_date"
@@ -283,7 +288,7 @@ class MainScenario
         check = message
       end
 
-      tutors = Messages.teachers
+      tutors = Messages.teachers_trunc
       found = []
       for t in tutors
         if UnicodeUtils.downcase(t[0..t.index(' ')-1])==UnicodeUtils.downcase(check) or UnicodeUtils.downcase(t)==UnicodeUtils.downcase(check)
@@ -342,8 +347,8 @@ class MainScenario
       else
         check = message
       end
-      tutors = Messages.teachers
-      for t in tutors
+      tutors = Messages.teachers_trunc
+      tutors.each do |t|
         if UnicodeUtils.downcase(t)==UnicodeUtils.downcase(check)
           dbc.update_user_context(id,'main')
 
@@ -353,16 +358,16 @@ class MainScenario
           elsif user_info[:context]=="timetable_multiple_tutor_yesterday"
             time=tf.time_array_form(:yesterday)
             return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
-          elsif user_info[:context]=="timetable_tutor_tomorrow"
+          elsif user_info[:context]=="timetable_multiple_tutor_tomorrow"
             time=tf.time_array_form(:tomorrow)
             return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
-          elsif user_info[:context]=="timetable_tutor_day_after_tomorrow"
+          elsif user_info[:context]=="timetable_multiple_tutor_day_after_tomorrow"
             time=tf.time_array_form(:day_after_tomorrow)
             return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
           end
-          if user_info[:context]=="timetable_tutor_week"
+          if user_info[:context]=="timetable_multiple_tutor_week"
             return tf.get_week_timetable(:tutor,message.force_encoding('UTF-8')),main_keyboard
-          elsif user_info[:context]=="timetable_tutor_date"
+          elsif user_info[:context]=="timetable_multiple_tutor_date"
             tut = message[0..message.rindex(' ')-1]
             begin
               time=tf.time_for_date(message[message.rindex(' ')+1..-1])
@@ -461,7 +466,7 @@ class MainScenario
         end
 
       elsif user_info[:context].index("timetable")!=nil
-        #TODO: registration is needed only for your timetable
+
         return timetable_context_check(message,id,dbc,df,tf)
       elsif user_info[:context]=="jokes"
         if message =="Случайные"
@@ -601,7 +606,6 @@ end
 
 
 class Telegram_handler
-  #TODO: Logging
   def mainloop
     token=Config.token
 

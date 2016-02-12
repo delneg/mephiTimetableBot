@@ -32,16 +32,16 @@ class TimetableEvent
     @id = Integer(json['id'])
     @title = json['title']
     @type = json['type']
-    @groups = json['groups'].split(':')
+    @groups = json['groups'].split(':').join(',')
     @teachers = json['teachers']
-    @auditories = json['auditories']
+    @auditories = json['auditories'].split(':').join(',')
     @note = json['note']
   end
   def to_s
     "#{(Time.at(@start_time)-3*60*60).strftime("%H:%M")}-#{(Time.at(@end_time)-3*60*60).strftime("%H:%M")} #{@title}, #{type} ведет #{@teachers}  в #{@auditories.gsub(":",",")}   Примечание:#{note}"
   end
   def allinfo
-    "#{(Time.at(@start_time)-3*60*60).strftime("%H:%M")}-#{(Time.at(@end_time)-3*60*60).strftime("%H:%M")}  #{@title} - это  #{@type}\nПроходит в #{@auditories.join(',')} у групп #{@groups},занятие ведет(ут) #{@teachers} \nПримечание - #{@note} \n"
+    "#{(Time.at(@start_time)-3*60*60).strftime("%H:%M")}-#{(Time.at(@end_time)-3*60*60).strftime("%H:%M")}  #{@title} - это  #{@type}\nПроходит в #{@auditories} у групп #{@groups},занятие ведет(ут) #{@teachers} \nПримечание - #{@note} \n"
   end
 end
 class TimetableFetcher
