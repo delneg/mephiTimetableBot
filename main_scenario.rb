@@ -19,12 +19,12 @@ class MainScenario
   #emoji list http://apps.timwhitlock.info/emoji/tables/unicode
 
   @@unreg_commands = ["\xF0\x9F\x86\x93Св. аудитории","\xF0\x9F\x9A\xB6Карта","\xF0\x9F\x94\xA2Функции",
-                    "\xF0\x9F\x93\xB0Новости","\xF0\x9F\x98\x82Шутки","\xE2\x9D\x93Обр. связь","\xF0\x9F\x93\x9DРегистрация"]
-  @@reg_commands   = ["\xF0\x9F\x93\x85Расписание","\xE2\x9C\x8FНастройки"]
+                    "\xF0\x9F\x93\xB0Новости","\xF0\x9F\x98\x82Шутки","\xE2\x9D\x93Обр. связь","\xF0\x9F\x93\x85Расписание","\xF0\x9F\x93\x9DРегистрация"]
+  @@reg_commands   = ["\xF0\x9F\x91\x89Моё расписaние","\xE2\x9C\x8FНастройки"]#hack used - second A in расписание is english, not rus
   @@menu_button = ["\xF0\x9F\x94\x99Меню"]
 
   def main_keyboard
-    Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:@@unreg_commands[0..-2].each_slice(2).to_a+@@reg_commands.each_slice(2).to_a, one_time_keyboard: false)
+    Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:(@@unreg_commands[0..-2]+@@reg_commands).each_slice(2).to_a, one_time_keyboard: false)
   end
 
   def handle_message(message,id)
@@ -69,19 +69,31 @@ class MainScenario
 
         return Config.feedback,main_keyboard
 
-      when @@unreg_commands[6]#registration
+      when @@unreg_commands[7]#registration
 
         dbc.update_user_context(id,'registration')
         invite = "Давайте вас зарегистрируем.В дальнейшем вы сможете изменить все данные в настройках.\nВы преподаватель или студент?"
         keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:["Студент","Преподаватель"]+@@menu_button, one_time_keyboard: false)
         return invite,keyboard
 
-      when @@reg_commands[0]#timetable
-          dbc.update_user_context(id,'timetable')
-          variants = [['Моё сегодня'],['Группа','Преподаватель'],['Аудитория','Др. моё']]
-          invite = 'Выберите, пожалуйста, тип показа расписания:'
-          keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
-          return invite,keyboard
+      when @@unreg_commands[6]#other timetable
+        dbc.update_user_context(id,'timetable')
+        variants = [['Группа','Преподаватель'],['Аудитория',@@menu_button[0]]]
+        invite = 'Выберите, пожалуйста, тип показа расписания:'
+        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants, one_time_keyboard: false)
+        return invite,keyboard
+
+      when @@reg_commands[0]#my timetable
+        user_info = dbc.get_user(id)
+        if user_info[:data]==''
+          dbc.update_user_context(id,'main')
+          return Messages.please_register,main_keyboard
+        end
+        dbc.update_user_context(id,'timetable_other')
+        variants = [["Вчера","Сегодня","Завтра"],["Послезавтра","Дата","Неделя"]]
+        invite = "Вы можете получить своё расписание на вчера, сегодня, завтра, послезавтра, на неделю или на конкретную дату"
+        keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
+        return invite,keyboard
 
 
       when @@reg_commands[1]#settings
@@ -116,19 +128,6 @@ class MainScenario
 
     if user_info[:context]=="timetable"
       case message
-        when 'Моё сегодня'
-          if user_info[:data]==''
-            dbc.update_user_context(id,'main')
-            return Messages.please_register,main_keyboard
-          end
-          dbc.update_user_context(id,'main')
-          time = tf.time_array_form(:today)
-          user=dbc.get_user(id)
-          if user[:type]=='1'
-            return tf.get_timetable(:tutor,user[:data].force_encoding('UTF-8'),time),main_keyboard
-          else
-            return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
-          end
         when 'Группа'
           dbc.update_user_context(id,'timetable_group')
           variants = [["Вчера","Сегодня","Завтра"],["Послезавтра","Дата","Неделя"]]
@@ -145,16 +144,6 @@ class MainScenario
           dbc.update_user_context(id,'timetable_auditory')
           variants = [["Вчера","Сегодня","Завтра"],["Послезавтра","Дата","Неделя"]]
           invite = "Вы можете получить расписание для аудитории на вчера, сегодня, завтра, послезавтра, на неделю или на конкретную дату"
-          keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
-          return invite,keyboard
-        when 'Др. моё'
-          if user_info[:data]==''
-            dbc.update_user_context(id,'main')
-            return Messages.please_register,main_keyboard
-          end
-          dbc.update_user_context(id,'timetable_other')
-          variants = [["Вчера","Сегодня","Завтра"],["Послезавтра","Дата","Неделя"]]
-          invite = "Вы можете получить своё расписание на вчера, сегодня, завтра, послезавтра, на неделю или на конкретную дату"
           keyboard = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:variants+@@menu_button, one_time_keyboard: false)
           return invite,keyboard
         else
@@ -603,7 +592,7 @@ class Telegram_handler
     msc=MainScenario.new
     dbc=DBController.new
     file = "mephiBot log.txt"
-    Telegram::Bot::Client.run(token,logger: Logger.new(file)) do |bot|
+    Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
 
       bot.listen do |message|
         begin
@@ -638,6 +627,10 @@ class Telegram_handler
             bot.logger.info("Sending start message reply")
               bot.api.send_message(chat_id:message.chat.id,text:Messages.start_message, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
               bot.api.send_message(chat_id:message.chat.id,text:Messages.in_development, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
+          elsif UnicodeUtils.downcase(message.text[0..4])==UnicodeUtils.downcase("опрос")
+            bot.logger.info("Survey answer detected")
+            bot.api.send_message(chat_id:message.chat.id,text:Messages.survey, reply_markup:msc.main_keyboard,disable_web_page_preview:true)
+            bot.api.send_message(chat_id: admin_id, text: "Survey answer from username:#{message.from.username},id:#{message.chat.id} First,last name:#{message.from.first_name} #{message.from.last_name}\nText:#{message.text}")
           elsif UnicodeUtils.downcase(message.text).include? UnicodeUtils.downcase("Карта")
             #path = '/Users/Delneg/Downloads/mephimap.jpg'
             path = '/root/mephitimetablebot/mephimap.jpg'

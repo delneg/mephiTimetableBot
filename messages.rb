@@ -37,6 +37,9 @@ module Messages
   def no_classes
     "Похоже,что занятий нет!"
   end
+  def survey
+    "Ваш ответ был записан и будет просмотрен.Если вы ошиблись или хотите написать что-то еще, просто используйте 'опрос' также еще раз.Спасибо большое за ответ!"
+  end
   def function_list
     "\xF0\x9F\x93\x85 /Расписание - показывает расписание аудиторий, групп, преподавателей, ваше - если вы зарегистрированы.
 \xF0\x9F\x86\x93 /Св. аудитории - показывает свободные аудитории в одном или всех корпусах
@@ -62,4 +65,5 @@ module Messages
   module_function :menu_message
   module_function :no_classes
   module_function :auditories
+  module_function :survey
 end
