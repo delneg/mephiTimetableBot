@@ -592,7 +592,7 @@ class Telegram_handler
     msc=MainScenario.new
     dbc=DBController.new
     file = "mephiBot log.txt"
-    Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
+    Telegram::Bot::Client.run(token,logger: Logger.new(file)) do |bot|
 
       bot.listen do |message|
         begin
