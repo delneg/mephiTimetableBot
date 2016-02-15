@@ -26,13 +26,12 @@ class MainScenario
   def main_keyboard
     Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:(@@unreg_commands[0..-2]+@@reg_commands).each_slice(2).to_a, one_time_keyboard: false)
   end
-
   def handle_message(message,id)
     found = ""
     df=DataFetcher.new
     dbc=DBController.new
     for command in @@unreg_commands+@@reg_commands+@@menu_button
-      if UnicodeUtils.downcase(message).include? UnicodeUtils.downcase(command[1..-1])
+      if UnicodeUtils.downcase(message.gsub('_','. ')).include? UnicodeUtils.downcase(command[1..-1])
         found = command
         break
       end
@@ -607,6 +606,9 @@ class Telegram_handler
                 users.each do |u|
                   bot.api.send_message(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
                 end
+              elsif message.text[0..8]=='increment'
+                dbc.increment_groups
+                bot.api.send_message(chat_id: admin_id, text: "Incremented,\n#{dbc.usercount}")
               elsif message.text[0..8] == 'usercount'
                 users = dbc.usercount
                 bot.logger.info("Sending usercount")

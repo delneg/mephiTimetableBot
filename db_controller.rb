@@ -52,6 +52,20 @@ class DBController
       con.close if con
     end
   end
+  def increment_groups
+    get_all_users.each do |user|
+      #({:id=>row[0],:context=>row[1],:type=>row[2],:data=>row[3]})
+      if user[:type]!='1'
+        d=user[:data].force_encoding('UTF-8')
+        old=Integer(d[1..d.index('-')-1])
+        old+=1
+        if old<10;old="0#{String(old)}" else old="#{String(old)}"  end
+        new="#{d[0]}#{old}#{user[:data][user[:data].index('-')..-1]}"
+        update_user_all(user[:id],user[:context],user[:type],new)
+      end
+    end
+
+  end
   def update_user_type(id)
     begin
       con = Mysql.new @@host, @@user, @@password, @@dbname
