@@ -66,7 +66,7 @@ class MainScenario
 
       when @@unreg_commands[5]#feedback
 
-        return Config.feedback,main_keyboard
+        return Config.s_message,main_keyboard
 
       when @@unreg_commands[7]#registration
 
