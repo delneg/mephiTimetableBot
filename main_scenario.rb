@@ -7,10 +7,9 @@ require_relative 'data_fetcher'
 require_relative 'db_controller'
 require_relative 'config'
 require_relative 'timetable_fetcher'
-#TODO: keyboards
+require_relative 'mephi_home_parser'
 #TODO: html markup
 #TODO: auto-increment groups in DB
-#TODO: обр. связь и св. ауитории в функциях измениь
 #TODO: избранное
 #TODO: teacher names(?)
 class MainScenario
@@ -23,6 +22,58 @@ class MainScenario
   @@reg_commands   = ["\xF0\x9F\x91\x89Моё расписaние","\xE2\x9C\x8FНастройки"]#hack used - second A in расписание is english, not rus
   @@menu_button = ["\xF0\x9F\x94\x99Меню"]
 
+  def update_database(logger,parser,period=5)
+    Thread.new do
+      EventMachine.run {
+        timer = EventMachine::PeriodicTimer.new(period) do
+          logger.info("Updating the timetable files in #{Time.now}")
+          Thread.new do
+            parser.store_all_tutors_timetable(logger)
+            parser.store_all_groups_timetable(logger)
+          end
+          timer.cancel
+        end
+      }
+    end
+  end
+  def get_timetable_wrapper(parser,type,data,time,date=nil)
+    # return codes
+    # string - all ok
+    # -1 - file not found
+    # -2 - no data matching
+    # -3 - no classes for the time
+    # -4 - wrong time
+    # -5 - wrong type
+    # -6 - wrong date
+    answer = parser.get_timetable(type,data,time,date)
+    if answer.class == "".class
+      answer
+    else
+      if answer==-1
+        #TODO: degradate, inform admin
+      elsif answer==-2
+        case type
+          when :auditory
+            return Messages.wrong_auditory
+          when :tutor
+            return Messages.teacher_not_found
+          when :group
+            return Messages.wrong_group
+          else
+            return -5
+        end
+      elsif answer==-3
+        return Messages.no_classes
+      elsif answer==-4
+        #TODO: throw & catch exception, inform user
+        return -4
+      elsif answer==-5
+        return -5
+      elsif answer==-6
+        return Messages.wrong_date
+      end
+    end
+  end
   def main_keyboard
     Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard:(@@unreg_commands[0..-2]+@@reg_commands).each_slice(2).to_a, one_time_keyboard: false)
   end
@@ -122,7 +173,7 @@ class MainScenario
 
     end
   end
-  def timetable_context_check(message,id,dbc,tf)
+  def timetable_context_check(message,id,dbc,parser)
     user_info = dbc.get_user(id)
 
     if user_info[:context]=="timetable"
@@ -183,31 +234,22 @@ class MainScenario
       if dbc.groupcheck(check)
         dbc.update_user_context(id,"main")
         if user_info[:context]=="timetable_group_today"
-          time=tf.time_array_form(:today)
-          return tf.get_timetable(:group,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:group,message.force_encoding('UTF-8'),:today),main_keyboard
         elsif user_info[:context]=="timetable_group_yesterday"
-          time=tf.time_array_form(:yesterday)
-          return tf.get_timetable(:group,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:group,message.force_encoding('UTF-8'),:yesterday),main_keyboard
         elsif user_info[:context]=="timetable_group_tomorrow"
-          time=tf.time_array_form(:tomorrow)
-          return tf.get_timetable(:group,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:group,message.force_encoding('UTF-8'),:tomorrow),main_keyboard
         elsif user_info[:context]=="timetable_group_day_after_tomorrow"
-          time=tf.time_array_form(:day_after_tomorrow)
-          return tf.get_timetable(:group,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:group,message.force_encoding('UTF-8'),:day_after_tomorrow),main_keyboard
         end
         if user_info[:context]=="timetable_group_week"
-          return tf.get_week_timetable(:group,message.force_encoding('UTF-8')),main_keyboard
+          return get_timetable_wrapper(parser,:group,message.force_encoding('UTF-8'),:week),main_keyboard
         elsif user_info[:context]=="timetable_group_date"
           grp = message[0..message.index(' ')-1]
-          begin
-            time=tf.time_for_date(message[message.index(' ')+1..-1])
-          rescue ArgumentError
-            return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе даты - попробуйте еще раз (Пример:23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
-          end
-          return tf.get_timetable(:group,grp.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:group,grp,:date,message[message.index(' ')+1..-1]),main_keyboard
         end
       else
-        return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе группы - попробуйте еще раз (Пример:Ф05-120)\nЕсли проблема повторяется, напишите @TheDelneg"
+        return Messages.wrong_group
       end
 
 
@@ -217,7 +259,7 @@ class MainScenario
         begin
           check = message[0..message.index(' ')-1]
         rescue NoMethodError
-          return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе аудитории - попробуйте еще раз (Пример:303 или К-417,Б-100)\nЕсли проблема повторяется, напишите @TheDelneg"
+          return Messages.wrong_auditory
         end
       else
         check = message
@@ -226,31 +268,22 @@ class MainScenario
       if Messages.auditories.include? check
         dbc.update_user_context(id,"main")
         if user_info[:context]=="timetable_auditory_today"
-          time=tf.time_array_form(:today)
-          return tf.get_timetable(:auditory,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:auditory,message.force_encoding('UTF-8'),:today),main_keyboard
         elsif user_info[:context]=="timetable_auditory_yesterday"
-          time=tf.time_array_form(:yesterday)
-          return tf.get_timetable(:auditory,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:auditory,message.force_encoding('UTF-8'),:yesterday),main_keyboard
         elsif user_info[:context]=="timetable_auditory_tomorrow"
-          time=tf.time_array_form(:tomorrow)
-          return tf.get_timetable(:auditory,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:auditory,message.force_encoding('UTF-8'),:tomorrow),main_keyboard
         elsif user_info[:context]=="timetable_auditory_day_after_tomorrow"
-          time=tf.time_array_form(:day_after_tomorrow)
-          return tf.get_timetable(:auditory,message.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:auditory,message.force_encoding('UTF-8'),:day_after_tomorrow),main_keyboard
         end
         if user_info[:context]=="timetable_auditory_week"
-          return tf.get_week_timetable(:auditory,message.force_encoding('UTF-8')),main_keyboard
+          return get_timetable_wrapper(parser,:auditory,message.force_encoding('UTF-8'),:week),main_keyboard
         elsif user_info[:context]=="timetable_auditory_date"
           aud = message[0..message.index(' ')-1]
-          begin
-            time=tf.time_for_date(message[message.index(' ')+1..-1])
-          rescue ArgumentError
-            return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе даты - попробуйте еще раз (Пример:23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
-          end
-          return tf.get_timetable(:auditory,aud.force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:auditory,aud,:date,message[message.index(' ')+1..-1]),main_keyboard
         end
       else
-        return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе аудитории - попробуйте еще раз (Пример:303 или К-417,Б-100)\nЕсли проблема повторяется, напишите @TheDelneg"
+        return Messages.wrong_auditory
       end
 
     elsif user_info[:context].include? "timetable_tutor_"
@@ -276,27 +309,18 @@ class MainScenario
       if found.count==1
         dbc.update_user_context(id,"main")
         if user_info[:context]=="timetable_tutor_today"
-          time=tf.time_array_form(:today)
-          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:tutor,found[0].force_encoding('UTF-8'),:today),main_keyboard
         elsif user_info[:context]=="timetable_tutor_yesterday"
-          time=tf.time_array_form(:yesterday)
-          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:tutor,found[0].force_encoding('UTF-8'),:yesterday),main_keyboard
         elsif user_info[:context]=="timetable_tutor_tomorrow"
-          time=tf.time_array_form(:tomorrow)
-          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:tutor,found[0].force_encoding('UTF-8'),:tomorrow),main_keyboard
         elsif user_info[:context]=="timetable_tutor_day_after_tomorrow"
-          time=tf.time_array_form(:day_after_tomorrow)
-          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:tutor,found[0].force_encoding('UTF-8'),:day_after_tomorrow),main_keyboard
         end
         if user_info[:context]=="timetable_tutor_week"
-          return tf.get_week_timetable(:tutor,found[0].force_encoding('UTF-8')),main_keyboard
+          return get_timetable_wrapper(parser,:tutor,found[0].force_encoding('UTF-8'),:week),main_keyboard
         elsif user_info[:context]=="timetable_tutor_date"
-          begin
-            time=tf.time_for_date(message[message.index(' ')+1..-1])
-          rescue ArgumentError
-            return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе даты - попробуйте еще раз (Пример:23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
-          end
-          return tf.get_timetable(:tutor,found[0].force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:tutor,found[0].force_encoding('UTF-8'),:date,message[message.index(' ')+1..-1]),main_keyboard
         end
       elsif found.count>1
         dbc.update_user_context(id,'timetable_multiple_tutor_'+user_info[:context][user_info[:context].index("tutor_")+6..-1])
@@ -330,28 +354,19 @@ class MainScenario
           dbc.update_user_context(id,'main')
 
           if user_info[:context]=="timetable_multiple_tutor_today"
-            time=tf.time_array_form(:today)
-            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,message.force_encoding('UTF-8'),:today),main_keyboard
           elsif user_info[:context]=="timetable_multiple_tutor_yesterday"
-            time=tf.time_array_form(:yesterday)
-            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,message.force_encoding('UTF-8'),:yesterday),main_keyboard
           elsif user_info[:context]=="timetable_multiple_tutor_tomorrow"
-            time=tf.time_array_form(:tomorrow)
-            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,message.force_encoding('UTF-8'),:tomorrow),main_keyboard
           elsif user_info[:context]=="timetable_multiple_tutor_day_after_tomorrow"
-            time=tf.time_array_form(:day_after_tomorrow)
-            return tf.get_timetable(:tutor,message.force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,message.force_encoding('UTF-8'),:day_after_tomorrow),main_keyboard
           end
           if user_info[:context]=="timetable_multiple_tutor_week"
-            return tf.get_week_timetable(:tutor,message.force_encoding('UTF-8')),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,message.force_encoding('UTF-8'),:week),main_keyboard
           elsif user_info[:context]=="timetable_multiple_tutor_date"
             tut = message[0..message.rindex(' ')-1]
-            begin
-              time=tf.time_for_date(message[message.rindex(' ')+1..-1])
-            rescue ArgumentError
-              return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе даты - попробуйте еще раз (Пример:23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
-            end
-            return tf.get_timetable(:tutor,tut.force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,tut,:date,message[message.rindex(' ')+1..-1]),main_keyboard
           end
         end
       end
@@ -361,39 +376,35 @@ class MainScenario
       case message
         when "Вчера"
           dbc.update_user_context(id,'main')
-          time = tf.time_array_form(:yesterday)
           user=dbc.get_user(id)
           if user[:type]=='1'
-            return tf.get_timetable(:tutor,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,user[:data].force_encoding('UTF-8'),:yesterday),main_keyboard
           else
-            return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:group,user[:data].force_encoding('UTF-8'),:yesterday),main_keyboard
           end
         when "Сегодня"
           dbc.update_user_context(id,'main')
-          time = tf.time_array_form(:today)
           user=dbc.get_user(id)
           if user[:type]=='1'
-            return tf.get_timetable(:tutor,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,user[:data].force_encoding('UTF-8'),:today),main_keyboard
           else
-            return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:group,user[:data].force_encoding('UTF-8'),:today),main_keyboard
           end
         when "Завтра"
           dbc.update_user_context(id,'main')
-          time = tf.time_array_form(:tomorrow)
           user=dbc.get_user(id)
           if user[:type]=='1'
-            return tf.get_timetable(:tutor,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,user[:data].force_encoding('UTF-8'),:tomorrow),main_keyboard
           else
-            return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:group,user[:data].force_encoding('UTF-8'),:tomorrow),main_keyboard
           end
         when "Послезавтра"
           dbc.update_user_context(id,'main')
-          time = tf.time_array_form(:day_after_tomorrow)
           user=dbc.get_user(id)
           if user[:type]=='1'
-            return tf.get_timetable(:tutor,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,user[:data].force_encoding('UTF-8'),:day_after_tomorrow),main_keyboard
           else
-            return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
+            return get_timetable_wrapper(parser,:group,user[:data].force_encoding('UTF-8'),:day_after_tomorrow),main_keyboard
           end
         when "Дата"
           dbc.update_user_context(id,'timetable_other_date')
@@ -404,22 +415,21 @@ class MainScenario
           dbc.update_user_context(id,'main')
           user=dbc.get_user(id)
           if user[:type]=='1'
-            return tf.get_week_timetable(:tutor,user[:data].force_encoding('UTF-8')),main_keyboard
+            return get_timetable_wrapper(parser,:tutor,user[:data].force_encoding('UTF-8'),:week),main_keyboard
           else
-            return tf.get_week_timetable(:group,user[:data].force_encoding('UTF-8')),main_keyboard
+            return get_timetable_wrapper(parser,:group,user[:data].force_encoding('UTF-8'),:week),main_keyboard
           end
         else
           return "Простите, я не понимаю. Попробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
       end
     elsif user_info[:context]=="timetable_other_date"
       begin
-        time=tf.time_for_date(message)
         dbc.update_user_context(id,'main')
         user=dbc.get_user(id)
         if user[:type]=='1'
-          return tf.get_timetable(:tutor,user[:data].force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:tutor,user[:data],:date,message),main_keyboard
         else
-          return tf.get_timetable(:group,user[:data].force_encoding('UTF-8'),time),main_keyboard
+          return get_timetable_wrapper(parser,:group,user[:data],:date,message),main_keyboard
         end
       rescue ArgumentError
         return "Простите, я не понимаю.Пример:10.02.2016\nПопробуйте еще раз!\xF0\x9F\x98\xA5 или напишите /меню , чтобы вернуться в меню"
@@ -430,6 +440,7 @@ class MainScenario
     dbc=DBController.new
     df=DataFetcher.new
     tf=TimetableFetcher.new
+    p=MephiHomeParser.new
     user_info = dbc.get_user(id)
     if user_info != nil
       if user_info[:context]=="free_auditories"
@@ -444,7 +455,7 @@ class MainScenario
 
       elsif user_info[:context].index("timetable")!=nil
 
-        return timetable_context_check(message,id,dbc,tf)
+        return timetable_context_check(message,id,dbc,p)
       elsif user_info[:context]=="jokes"
         if message =="Случайные"
           dbc.update_user_context(id,'main')
@@ -590,9 +601,11 @@ class Telegram_handler
     #time options yesterday,today,tomorrow,the day after tomorrow,date
     msc=MainScenario.new
     dbc=DBController.new
+    pars=MephiHomeParser.new
     file = "mephiBot log.txt"
-    Telegram::Bot::Client.run(token,logger: Logger.new(file)) do |bot|
 
+    Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
+      msc.update_database(bot.logger,pars)
       bot.listen do |message|
         begin
           bot.logger.info("Message from username:#{message.from.username},id:#{message.chat.id} First,last name:#{message.from.first_name} #{message.from.last_name} Text:#{message.text}")

@@ -4,7 +4,6 @@ require 'time'
 require 'msgpack'
 require 'parallel'
 require 'eventmachine'
-#TODO: similar groups, У06-712 - У06-712Б
 class MephiHomeParser
   def weekday_number_to_rus(number)
     case number
@@ -100,14 +99,13 @@ class MephiHomeParser
     end
     groups
   end
-  def store_all_groups_timetable
-    #Time.now.to_s,to_i
+  def store_all_groups_timetable(logger)
     groups_timetable=[]
-    puts "Parsing groups began at #{Time.now.to_s}"
+    logger.info("Parsing groups began at #{Time.now.to_s}")
     beginning_time = Time.now
     faculty_groups = parse_all_groups
     end_time = Time.now
-    puts "Parsing groups finished #{(end_time - beginning_time)*1000} milliseconds"
+    logger.info("Parsing groups finished #{(end_time - beginning_time)*1000} milliseconds")
     all_begin_time=Time.now
     faculty_groups.each do |groups|
       Parallel.each(groups, :in_threads => 10) do |gr|
@@ -115,14 +113,46 @@ class MephiHomeParser
         beginning_time = Time.now
         groups_timetable.push(:name=>gr[:name],:url=>gr[:url],:timetable=>parse_timetable(gr[:url]))
         end_time = Time.now
-        puts "Finished parsing group #{gr[:name]} in #{(end_time - beginning_time)*1000} milliseconds"
+        #puts "Finished parsing group #{gr[:name]} in #{(end_time - beginning_time)*1000} milliseconds"
       end
     end
     all_end_time=Time.now
-    puts "Finished everything in #{(all_end_time - all_begin_time)*1000} milliseconds"
     filename='groups_timetable.msgpack'
+    check_for_old(filename)
     File.write(filename, groups_timetable.to_msgpack)
+    logger.info("Finished all groups in #{(all_end_time - all_begin_time)*1000} milliseconds")
     filename
+  end
+  def store_all_tutors_timetable(logger)
+    tutors_timetable=[]
+    logger.info("Parsing tutors began at #{Time.now.to_s}")
+    beginning_time = Time.now
+    tutors = parse_all_tutors
+    end_time = Time.now
+    logger.info("Parsing tutors finished #{(end_time - beginning_time)*1000} milliseconds")
+    all_begin_time=Time.now
+    Parallel.each(tutors, :in_threads => 10) do |tutor|
+      #puts "Parsing timetable for group #{gr},\t\t#{Time.now.to_s}"
+      beginning_time = Time.now
+      tutors_timetable.push(:name=>tutor[:name],:url=>tutor[:url],:timetable=>parse_timetable(tutor[:url]))
+      end_time = Time.now
+     # puts "Finished parsing tutor #{tutor[:name]} in #{(end_time - beginning_time)*1000} milliseconds"
+    end
+    all_end_time=Time.now
+    filename='tutors_timetable.msgpack'
+    check_for_old(filename)
+    File.write(filename, tutors_timetable.to_msgpack)
+    logger.info("Finished all tutors in #{(all_end_time - all_begin_time)*1000} milliseconds")
+    filename
+  end
+  def check_for_old(filename)
+    if File.exist?(filename)
+      new=File.basename(filename,".*")+"_old"+File.extname(filename)
+      if File.exist?(new)
+        File.delete(new)
+      end
+      File.rename(filename, new)
+    end
   end
   def parse_all_tutors
     tutors=[]
@@ -178,28 +208,7 @@ class MephiHomeParser
     end
     tutors
   end
-  def store_all_tutors_timetable
-    #Time.now.to_s,to_i
-    tutors_timetable=[]
-    puts "Parsing tutors began at #{Time.now.to_s}"
-    beginning_time = Time.now
-    tutors = parse_all_tutors
-    end_time = Time.now
-    puts "Parsing tutors finished #{(end_time - beginning_time)*1000} milliseconds"
-    all_begin_time=Time.now
-    Parallel.each(tutors, :in_threads => 10) do |tutor|
-        #puts "Parsing timetable for group #{gr},\t\t#{Time.now.to_s}"
-        beginning_time = Time.now
-        tutors_timetable.push(:name=>tutor[:name],:url=>tutor[:url],:timetable=>parse_timetable(tutor[:url]))
-        end_time = Time.now
-        #puts "Finished parsing tutor #{tutor[:name]} in #{(end_time - beginning_time)*1000} milliseconds"
-      end
-    all_end_time=Time.now
-    puts "Finished everything in #{(all_end_time - all_begin_time)*1000} milliseconds"
-    filename='tutors_timetable.msgpack'
-    File.write(filename, tutors_timetable.to_msgpack)
-    filename
-  end
+
 
   def parse_timetable(url)
     #свойства - тип(лекция, лаба, практика), время, четные/нечетные/все,
@@ -271,29 +280,6 @@ class MephiHomeParser
       all_lessons[day_name.text.gsub("\n","")]=day_lessons
     end
     all_lessons
-  end
-  def get_date_timetable(date_string,data,type)
-    case type
-      when :auditory
-        filename='auditories_timetable.msgpack'
-      when :tutor
-        filename='tutors_timetable.msgpack'
-      when :group
-        filename='groups_timetable.msgpack'
-      else
-        return -5
-    end
-    begin
-      tmt=MessagePack.unpack(File.read(filename))
-    rescue Exception
-      return -1
-    end
-    begin
-    date = Date.strptime(date_string,format="%d.%m.%Y").strftime("%u")
-    rescue ArgumentError
-      return -6
-    end
-
   end
   def get_timetable(type,data,time,date=nil)
     # return codes
@@ -385,19 +371,20 @@ class MephiHomeParser
   end
 end
 
-m=MephiHomeParser.new
+#m=MephiHomeParser.new
+#m.check_for_old("groups_timetable.msgpack")
 #puts m.get_timetable(:group,"У06-712",:date,"23.02.2016")
-n = 0
-EventMachine.run {
-timer = EventMachine::PeriodicTimer.new(5) do
-  puts "the time is #{Time.now}"
-  Thread.new do
-    m.store_all_tutors_timetable
-    m.store_all_groups_timetable
-  end
-  timer.cancel
-end
-}
+# n = 0
+# EventMachine.run {
+# timer = EventMachine::PeriodicTimer.new(5) do
+#   puts "the time is #{Time.now}"
+#   Thread.new do
+#     m.store_all_tutors_timetable
+#     m.store_all_groups_timetable
+#   end
+#   timer.cancel
+# end
+# }
 #puts m.store_all_groups_timetable
 #puts m.parse_all_groups
 #puts m.parse_timetable('/tutors/313').flatten
