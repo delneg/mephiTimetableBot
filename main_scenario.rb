@@ -22,7 +22,7 @@ class MainScenario
   @@reg_commands   = ["\xF0\x9F\x91\x89Моё расписaние","\xE2\x9C\x8FНастройки"]#hack used - second A in расписание is english, not rus
   @@menu_button = ["\xF0\x9F\x94\x99Меню"]
 
-  def update_database(logger,parser,period=5)
+  def update_database(logger,parser,period=60*60)
     Thread.new do
       EventMachine.run {
         timer = EventMachine::PeriodicTimer.new(period) do
@@ -31,7 +31,6 @@ class MainScenario
             parser.store_all_tutors_timetable(logger)
             parser.store_all_groups_timetable(logger)
           end
-          timer.cancel
         end
       }
     end
@@ -50,6 +49,29 @@ class MainScenario
       answer
     else
       if answer==-1
+        puts "file not found for #{type}"
+        tf=TimetableFetcher.new
+
+        if time==:week
+
+          return tf.get_week_timetable(type,data.force_encoding('UTF-8'))
+
+        elsif time==:date
+
+          begin
+            time_arr=tf.time_for_date(date)
+          rescue ArgumentError
+            return "\xF0\x9F\x98\xA5Похоже,вы допустили ошибку при вводе даты - попробуйте еще раз (Пример:23.02.2016)\nЕсли проблема повторяется, напишите @TheDelneg"
+          end
+          return tf.get_timetable(type,data.force_encoding('UTF-8'),time_arr)
+
+        else
+
+          time_arr=tf.time_array_form(time)
+          return tf.get_timetable(type,data.force_encoding('UTF-8'),time_arr)
+
+        end
+
         #TODO: degradate, inform admin
       elsif answer==-2
         case type
@@ -116,7 +138,6 @@ class MainScenario
         return invite,keyboard
 
       when @@unreg_commands[5]#feedback
-
         return Config.s_message,main_keyboard
 
       when @@unreg_commands[7]#registration
