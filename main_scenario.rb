@@ -41,6 +41,15 @@ class MainScenario
       }
     end
   end
+  def force_update_db(bot,parser)
+    logger=bot.logger
+    logger.info("Updating the timetable files in #{Time.now}")
+    Thread.new do
+      parser.store_all_tutors_timetable(logger)
+      parser.store_all_groups_timetable(logger)
+      bot.api.send_message(chat_id: admin_id, text: "Updated at #{Time.now}")
+    end
+  end
   def get_timetable_wrapper(parser,type,data,time,date=nil)
     # return codes
     # string - all ok
@@ -635,7 +644,7 @@ class Telegram_handler
     pars=MephiHomeParser.new
     file = "mephiBot log.txt"
 
-    Telegram::Bot::Client.run(token,logger: Logger.new(file)) do |bot|
+    Telegram::Bot::Client.run(token,logger: Logger.new(Config.log_place)) do |bot|
       msc.update_database(bot,pars)
       bot.listen do |message|
         begin
@@ -665,10 +674,10 @@ class Telegram_handler
                 bot.api.send_document(chat_id: admin_id, document:File.new(file))
               elsif message.text[0..5]=='update'
                 bot.api.send_message(chat_id: admin_id, text: "Updating...")
-                msc.update_database(bot,pars)
+                msc.force_update_db(bot,pars)
               elsif message.text[0..8] == 'functions'
                 bot.logger.info("Sending functions")
-                bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,query querytext,logs,functions")
+                bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,query querytext,logs,update,functions")
               end
           end
 
