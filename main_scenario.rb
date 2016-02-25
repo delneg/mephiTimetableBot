@@ -26,7 +26,8 @@ class MainScenario
   @@menu_button = ["\xF0\x9F\x94\x99Меню"]
 
 
-  def update_database(logger,parser,period=60*60)
+  def update_database(bot,parser,period=60*60)
+    logger=bot.logger
     Thread.new do
       EventMachine.run {
         timer = EventMachine::PeriodicTimer.new(period) do
@@ -34,6 +35,7 @@ class MainScenario
           Thread.new do
             parser.store_all_tutors_timetable(logger)
             parser.store_all_groups_timetable(logger)
+            bot.api.send_message(chat_id: admin_id, text: "Updated at #{Time.now}")
           end
         end
       }
@@ -634,7 +636,7 @@ class Telegram_handler
     file = "mephiBot log.txt"
 
     Telegram::Bot::Client.run(token,logger: Logger.new(file)) do |bot|
-      msc.update_database(bot.logger,pars)
+      msc.update_database(bot,pars)
       bot.listen do |message|
         begin
           bot.logger.info("Message from username:#{message.from.username},id:#{message.chat.id} First,last name:#{message.from.first_name} #{message.from.last_name} Text:#{message.text}")
@@ -661,6 +663,9 @@ class Telegram_handler
                 bot.api.send_message(chat_id: admin_id, text: dbc.do_db_query(query))
               elsif message.text[0..3]=='logs'
                 bot.api.send_document(chat_id: admin_id, document:File.new(file))
+              elsif message.text[0..5]=='update'
+                bot.api.send_message(chat_id: admin_id, text: "Updating...")
+                msc.update_database(bot,pars)
               elsif message.text[0..8] == 'functions'
                 bot.logger.info("Sending functions")
                 bot.api.send_message(chat_id: admin_id, text: "broadcast messagetext,usercount,query querytext,logs,functions")
