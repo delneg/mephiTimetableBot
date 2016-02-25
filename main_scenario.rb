@@ -14,13 +14,17 @@ require_relative 'mephi_home_parser'
 #TODO: teacher names(?)
 class MainScenario
 
-
+  @timetable_usage_type=:home
+  def timetable_usage_type
+    @timetable_usage_type
+  end
   #emoji list http://apps.timwhitlock.info/emoji/tables/unicode
 
   @@unreg_commands = ["\xF0\x9F\x86\x93Св. аудитории","\xF0\x9F\x9A\xB6Карта","\xF0\x9F\x94\xA2Функции",
                     "\xF0\x9F\x93\xB0Новости","\xF0\x9F\x98\x82Шутки","\xE2\x9D\x93Обр. связь","\xF0\x9F\x93\x85Расписание","\xF0\x9F\x93\x9DРегистрация"]
   @@reg_commands   = ["\xF0\x9F\x91\x89Моё расписaние","\xE2\x9C\x8FНастройки"]#hack used - second A in расписание is english, not rus
   @@menu_button = ["\xF0\x9F\x94\x99Меню"]
+
 
   def update_database(logger,parser,period=60*60)
     Thread.new do
@@ -46,10 +50,12 @@ class MainScenario
     # -6 - wrong date
     answer = parser.get_timetable(type,data,time,date)
     if answer.class == "".class
+      @timetable_usage_type=:home
       answer
     else
       if answer==-1
-        puts "file not found for #{type}"
+        @timetable_usage_type=:mephist
+        #puts "file not found for #{type}"
         tf=TimetableFetcher.new
 
         if time==:week
@@ -72,27 +78,29 @@ class MainScenario
 
         end
 
-        #TODO: degradate, inform admin
-      elsif answer==-2
-        case type
-          when :auditory
-            return Messages.wrong_auditory
-          when :tutor
-            return Messages.teacher_not_found
-          when :group
-            return Messages.wrong_group
-          else
-            return -5
+      else
+        @timetable_usage_type=:home
+        if answer==-2
+          case type
+            when :auditory
+              return Messages.wrong_auditory
+            when :tutor
+              return Messages.teacher_not_found
+            when :group
+              return Messages.wrong_group
+            else
+              return -5
+          end
+        elsif answer==-3
+          return Messages.no_classes
+        elsif answer==-4
+          #TODO: throw & catch exception, inform user
+          return -4
+        elsif answer==-5
+          return -5
+        elsif answer==-6
+          return Messages.wrong_date
         end
-      elsif answer==-3
-        return Messages.no_classes
-      elsif answer==-4
-        #TODO: throw & catch exception, inform user
-        return -4
-      elsif answer==-5
-        return -5
-      elsif answer==-6
-        return Messages.wrong_date
       end
     end
   end
@@ -625,7 +633,7 @@ class Telegram_handler
     pars=MephiHomeParser.new
     file = "mephiBot log.txt"
 
-    Telegram::Bot::Client.run(token,logger: Logger.new($stdout)) do |bot|
+    Telegram::Bot::Client.run(token,logger: Logger.new(file)) do |bot|
       msc.update_database(bot.logger,pars)
       bot.listen do |message|
         begin
@@ -685,7 +693,9 @@ class Telegram_handler
               else
                 bot.api.send_message(chat_id:message.chat.id,text:message_handling,disable_web_page_preview:true)
               end
-
+              if msc.timetable_usage_type==:mephist
+                bot.api.send_message(chat_id: admin_id, text: "Degradated to mephist")
+              end
               bot.logger.info("Sent message handling result")
           end
 

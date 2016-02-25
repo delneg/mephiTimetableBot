@@ -325,9 +325,9 @@ class MephiHomeParser
         else
           day = -1
       end
-      day_timetable = tmt.select{|s| s['name']==data}
+      day_timetable = tmt.select{|s| UnicodeUtils.downcase(s['name'])==UnicodeUtils.downcase(data)}
       if day_timetable==[]
-        similar = tmt.select{|s| s['name'].include? data}
+        similar = tmt.select{|s| UnicodeUtils.downcase(s['name']).include? UnicodeUtils.downcase(data)}
         if similar==[]
           return -2
         else
@@ -348,9 +348,9 @@ class MephiHomeParser
         end
       end
     elsif time==:week
-      day_timetable = tmt.select{|s| s['name']==data}
+      day_timetable = tmt.select{|s| UnicodeUtils.downcase(s['name'])==UnicodeUtils.downcase(data)}
       if day_timetable==[]
-        similar = tmt.select{|s| s['name'].include? data}
+        similar = tmt.select{|s| UnicodeUtils.downcase(s['name']).include? UnicodeUtils.downcase(data)}
         if similar==[]
           return -2
         else
