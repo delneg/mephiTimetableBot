@@ -657,7 +657,11 @@ class Telegram_handler
                 users = dbc.get_all_users
                 bot.logger.info("Sending broadcast message to #{users.count} users")
                 users.each do |u|
-                  bot.api.send_message(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
+                  begin
+                    bot.api.send_message(chat_id:u[:id],text:broadcast_text, reply_markup:msc.main_keyboard)
+                  rescue Exception
+                    bot.logger.info("User blocked the bot #{u}")
+                  end
                 end
               elsif message.text[0..8]=='increment'
                 dbc.increment_groups
