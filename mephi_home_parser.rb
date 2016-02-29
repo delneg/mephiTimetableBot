@@ -132,11 +132,11 @@ class MephiHomeParser
     logger.info("Parsing tutors finished #{(end_time - beginning_time)*1000} milliseconds")
     all_begin_time=Time.now
     Parallel.each(tutors, :in_threads => 10) do |tutor|
-      #puts "Parsing timetable for group #{gr},\t\t#{Time.now.to_s}"
+      #puts "Parsing timetable for  #{gr},\t\t#{Time.now.to_s}"
       beginning_time = Time.now
       tutors_timetable.push(:name=>tutor[:name],:url=>tutor[:url],:timetable=>parse_timetable(tutor[:url]))
       end_time = Time.now
-     # puts "Finished parsing tutor #{tutor[:name]} in #{(end_time - beginning_time)*1000} milliseconds"
+     #puts "Finished parsing tutor #{tutor[:name]} in #{(end_time - beginning_time)*1000} milliseconds"
     end
     all_end_time=Time.now
     filename='tutors_timetable.msgpack'
@@ -221,61 +221,61 @@ class MephiHomeParser
       day_lessons=[]
       day_classes=divs[i].css('div').select{|link| link['class'] == "list-group-item"}
       day_classes.each do |lesson|
-        lesson_object={}
+
         time=lesson.css('div').select{|link| link['class'] == "lesson-time"}[0].text
         lesson_main=lesson.css('div').select{|link| link['class'] == "lesson-lessons"}[0]
-        lesson_with_type=lesson_main.css('div').select{|link| link['class'] == "lesson lesson-lecture" or link['class'] == "lesson lesson-practice" \
-        or link['class'] == "lesson lesson-lab" or link['class'] == "lesson lesson-default"or link['class'] == "lesson"}[0]
-
-        place_a=lesson_with_type.css('a').select{|link| link['class'] == "text-nowrap"}[0]
-        if place_a
-          place={:url=>place_a['href'],:name=>place_a.text}
-          lesson_object[:place]=place
-        end
-        oddness=lesson_with_type.css('span').select{|link| link['data-toggle'] == "tooltip"}[0]['title']
-
-
-        #if place[:name]=="Б-215"
-        #end
-
-        lesson_name=""
-        lesson_with_type.children.each do |c|
-          if c.class == Nokogiri::XML::Text and c.text != "\n"
-            lesson_name=c.text.gsub("\n","")
-            break
+        lessons_with_types=lesson_main.css('div').select{|link| link['class'] == "lesson lesson-lecture" or link['class'] == "lesson lesson-practice" \
+        or link['class'] == "lesson lesson-lab" or link['class'] == "lesson lesson-default"or link['class'] == "lesson"}
+        lessons_with_types.each do |lesson_with_type|
+          lesson_object={}
+          place_a=lesson_with_type.css('a').select{|link| link['class'] == "text-nowrap"}[0]
+          if place_a
+            place={:url=>place_a['href'],:name=>place_a.text}
+            lesson_object[:place]=place
           end
-        end
-        lesson_object[:name]=lesson_name
+          oddness=lesson_with_type.css('span').select{|link| link['data-toggle'] == "tooltip"}[0]['title']
+          #if place[:name]=="Б-215"
+          #end
 
-        tutor_a=lesson_with_type.css('a').select{|link| link['class'] == "text-nowrap"}[1]
-        if tutor_a
-          tutor={:url=>tutor_a['href'],:name=>tutor_a.text}
-          lesson_object[:tutor]=tutor
-        end
-        lesson_object[:time]=time
-        lesson_object[:oddness]=oddness
-        div_special = lesson_with_type.css('div').select{|link| link['class'] == "label label-gray" or link['class']=="label label-pink"}[0]
-        if div_special
-          lesson_object[:special]=div_special['title']
-        end
-        lesson_dates = lesson_with_type.css('span').select{|link| link['class'] == "lesson-dates"}[0]
-        if lesson_dates
-          lesson_object[:dates]=lesson_dates.text.gsub("\n","")
-        end
+          lesson_name=""
+          lesson_with_type.children.each do |c|
+            if c.class == Nokogiri::XML::Text and c.text != "\n"
+              lesson_name=c.text.gsub("\n","")
+              break
+            end
+          end
+          lesson_object[:name]=lesson_name
+
+          tutor_a=lesson_with_type.css('a').select{|link| link['class'] == "text-nowrap"}[1]
+          if tutor_a
+            tutor={:url=>tutor_a['href'],:name=>tutor_a.text}
+            lesson_object[:tutor]=tutor
+          end
+          lesson_object[:time]=time
+          lesson_object[:oddness]=oddness
+          div_special = lesson_with_type.css('div').select{|link| link['class'] == "label label-gray" or link['class']=="label label-pink"}[0]
+          if div_special
+            lesson_object[:special]=div_special['title']
+          end
+          lesson_dates = lesson_with_type.css('span').select{|link| link['class'] == "lesson-dates"}[0]
+          if lesson_dates
+            lesson_object[:dates]=lesson_dates.text.gsub("\n","")
+          end
 
 
-        if lesson_with_type['class']=="lesson lesson-lab"
-          lesson_object[:type]="Лабораторная"
-        elsif lesson_with_type['class']=="lesson lesson-lecture"
-          lesson_object[:type]="Лекция"
-        elsif lesson_with_type['class']=="lesson lesson-practice"
-          lesson_object[:type]="Практика"
-        elsif lesson_with_type['class']=="lesson lesson-default"
-          lesson_object[:type]="Обычное"
-        elsif lesson_with_type['class']=="lesson"
-          lesson_object[:type]="Резерв"
+          if lesson_with_type['class']=="lesson lesson-lab"
+            lesson_object[:type]="Лабораторная"
+          elsif lesson_with_type['class']=="lesson lesson-lecture"
+            lesson_object[:type]="Лекция"
+          elsif lesson_with_type['class']=="lesson lesson-practice"
+            lesson_object[:type]="Практика"
+          elsif lesson_with_type['class']=="lesson lesson-default"
+            lesson_object[:type]="Обычное"
+          elsif lesson_with_type['class']=="lesson"
+            lesson_object[:type]="Резерв"
+          end
+          day_lessons.push(lesson_object)
         end
-        day_lessons.push(lesson_object)
       end
       all_lessons[day_name.text.gsub("\n","")]=day_lessons
     end
@@ -325,9 +325,9 @@ class MephiHomeParser
         else
           day = -1
       end
-      day_timetable = tmt.select{|s| UnicodeUtils.downcase(s['name'])==UnicodeUtils.downcase(data)}
+      day_timetable = tmt.select{|s| UnicodeUtils.downcase(s['name'].force_encoding('UTF-8'))==UnicodeUtils.downcase(data.force_encoding('UTF-8'))}
       if day_timetable==[]
-        similar = tmt.select{|s| UnicodeUtils.downcase(s['name']).include? UnicodeUtils.downcase(data)}
+        similar = tmt.select{|s| UnicodeUtils.downcase(s['name'].force_encoding('UTF-8')).include? UnicodeUtils.downcase(data.force_encoding('UTF-8'))}
         if similar==[]
           return -2
         else
@@ -388,7 +388,7 @@ end
 #puts m.store_all_groups_timetable
 #puts m.parse_all_groups
 #puts m.parse_timetable('/tutors/313').flatten
-#puts m.parse_timetable('/study_groups/1018/schedule').flatten
+#puts m.parse_timetable('/study_groups/1233/schedule').flatten
 #groups = m.parse_all_groups
   #faculty_groups.each do |gr|
     #m.parse_timetable(gr[:url])
