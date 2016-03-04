@@ -338,7 +338,10 @@ class MainScenario
         check = message
       end
 
-      tutors = Messages.teachers_trunc
+      tutors =parser.get_teachers
+      if !tutors
+        tutors=Messages.teachers
+      end
       found = []
       for t in tutors
         if UnicodeUtils.downcase(t[0..t.index(' ')-1])==UnicodeUtils.downcase(check) or UnicodeUtils.downcase(t)==UnicodeUtils.downcase(check)
@@ -388,9 +391,12 @@ class MainScenario
       else
         check = message
       end
-      tutors = Messages.teachers_trunc
+      tutors =parser.get_teachers
+      if !tutors
+        tutors=Messages.teachers
+      end
       tutors.each do |t|
-        if UnicodeUtils.downcase(t)==UnicodeUtils.downcase(check)
+        if UnicodeUtils.downcase(t[0..t.index(' ')-1])==UnicodeUtils.downcase(check) or UnicodeUtils.downcase(t)==UnicodeUtils.downcase(check)
           dbc.update_user_context(id,'main')
 
           if user_info[:context]=="timetable_multiple_tutor_today"

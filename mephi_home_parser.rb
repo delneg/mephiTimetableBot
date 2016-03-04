@@ -4,6 +4,7 @@ require 'time'
 require 'msgpack'
 require 'parallel'
 require 'eventmachine'
+require 'unicode_utils'
 class MephiHomeParser
   def weekday_number_to_rus(number)
     case number
@@ -281,6 +282,15 @@ class MephiHomeParser
     end
     all_lessons
   end
+  def get_teachers
+    filename='tutors_timetable.msgpack'
+    begin
+      tmt=MessagePack.unpack(File.read(filename))
+      tmt.map{|x| x['name']}
+    rescue
+      return nil
+    end
+  end
   def get_timetable(type,data,time,date=nil)
     # return codes
     # string - all ok
@@ -371,7 +381,11 @@ class MephiHomeParser
   end
 end
 
-#m=MephiHomeParser.new
+#  m=MephiHomeParser.new
+# puts m.get_teachers
+# puts m.parse_all_tutors
+#tmt=MessagePack.unpack(File.read("tutors_timetable.msgpack"))
+#puts m.get_timetable(:tutor,"Смирнов Дмитрий Сергеевич",:today)
 #m.check_for_old("groups_timetable.msgpack")
 #puts m.get_timetable(:group,"У06-712",:date,"23.02.2016")
 # n = 0
