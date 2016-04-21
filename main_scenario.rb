@@ -675,7 +675,14 @@ class Telegram_handler
               elsif message.text[0..8] == 'usercount'
                 users = dbc.usercount
                 bot.logger.info("Sending usercount")
-                bot.api.send_message(chat_id: admin_id, text: users)
+                if users.length > 4080
+                  users.scan(/.{1,4080}/).each do |usercount_part|
+                    bot.api.send_message(chat_id: admin_id, text: usercount_part)
+                  end
+                else
+                  bot.api.send_message(chat_id: admin_id, text: users)
+                end
+
               elsif message.text[0..4]== 'query'
                 query = message.text[6..-1]
                 bot.logger.info("Doing query #{query}")
